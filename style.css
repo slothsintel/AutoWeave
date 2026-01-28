@@ -1,0 +1,1025 @@
+/* =========================================================
+   Sloths Intel — style.css (tidied + deduplicated)
+   0) Reset + Variables
+   ========================================================= */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root{
+  /* Header offset for fixed header (desktop default) */
+  --header-offset: 10px;
+
+  /* Softer, more “creamy green” palette */
+  --bg: #f2f7f1;
+  --surface: #ffffff;
+  --text: #0f1f17;
+  --muted: #40554b;
+  --accent: #2f7d63;
+  --accent-soft: #e2f0ea;
+  --divider: #d6e2da;
+  --radius-lg: 1.2rem;
+  --shadow: 0 8px 24px rgba(15,31,23,0.08);
+}
+
+
+/* =========================================================
+   1) Base Page Layout
+   ========================================================= */
+
+html, body{
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  color: var(--text);
+  line-height: 1.65;
+  background: var(--bg);
+}
+
+/* Reserve space so content never sits under the fixed header */
+body{
+  padding-top: var(--header-offset);
+}
+
+/* Containers */
+.container{
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+
+/* =========================================================
+   2) Header (Fixed)
+   ========================================================= */
+
+.site-header{
+  position: fixed;
+  top: 2;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--bg);
+}
+
+.site-header .container{
+  width: 100%;
+}
+
+
+/* =========================================================
+   3) Header “Card” + Footer “Card”
+   - Shared “card” visual style.
+   ========================================================= */
+
+.nav-container,
+.site-footer .footer-grid{
+  background: rgba(255,255,255,0.90);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 0.6rem 1.6rem;
+}
+
+.nav-container{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  position: relative; /* anchor for mobile hamburger positioning */
+}
+
+
+/* =========================================================
+   4) Logo
+   ========================================================= */
+
+.logo{
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.logo-img{
+  height: 34px;
+  width: 34px;
+  border-radius: 50%;
+}
+.logo-text{
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+}
+.logo-text span{
+  color: inherit;
+}
+
+
+/* =========================================================
+   5) Desktop Navigation Pills
+   - Premium pill buttons.
+   ========================================================= */
+
+.main-nav{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.nav-link{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 44px;
+  padding: 0 16px;
+
+  border-radius: 9999px;
+  border: 1px solid rgba(15,31,23,0.10);
+
+  background: rgba(255,255,255,0.92);
+  color: var(--muted);
+
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-link:hover{
+  color: var(--text);
+  border-color: rgba(15, 39, 31, 0.35);
+}
+
+/* Active: subtle, not neon */
+.nav-link.active,
+.nav-link[aria-current="page"]{
+  border-color: rgba(15, 44, 35, 0.45);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+
+/* =========================================================
+   6) Desktop Dropdown (details/summary)
+   - Dropdown caret uses “≡” as you currently have; keep or change later.
+   - Menu is a small card.
+   ========================================================= */
+
+.nav-dropdown{
+  position: relative;
+  display: inline-block;
+}
+
+.nav-dropdown > summary{
+  list-style: none;
+}
+.nav-dropdown > summary::-webkit-details-marker{
+  display: none;
+}
+
+/* Caret / icon */
+.nav-dropdown > summary::after{
+  content: "≡";
+  margin-left: 1rem;
+  font-size: 2em;
+  opacity: 0.5;
+  letter-spacing: -0.05em;
+}
+
+.nav-dropdown-menu{
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 220px;
+  padding: 0.5rem;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--divider);
+  box-shadow: 0 12px 28px rgba(4, 8, 6, 0.12);
+  z-index: 2000;
+}
+
+.nav-dropdown-link{
+  display: block;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.nav-dropdown-link:hover{
+  background: rgba(47,125,99,0.10);
+  color: var(--text);
+}
+
+.nav-dropdown:not([open]) .nav-dropdown-menu{
+  display: none;
+}
+
+
+/* =========================================================
+   7) Typography
+   - Removed global “p { max-width: 100% !important; }” which broke layouts.
+   - Keep normal paragraph rhythm.
+   ========================================================= */
+
+h1, h2, h3{
+  color: var(--text);
+  margin: 0.5rem 0;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+h1{ font-size: clamp(1.9rem, 3.6vw, 2.4rem); }
+h2{ font-size: 1.25rem; margin-top: 1.2rem; }
+
+p{ margin: 0.9rem 0; }
+
+a{ color: var(--accent); }
+a:hover{ text-decoration: underline; }
+
+.lead{
+  margin: 0.45rem 0;
+  font-size: clamp(1.8rem, 4vw, 2.35rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+
+/* Pill tagline */
+.pill{
+  display: inline-block;
+  margin-top: 1.1rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(15,31,23,0.10);
+  padding: 0.4rem 0.9rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  background: rgba(255,255,255,0.92);
+}
+
+
+/* =========================================================
+   8) Dividers + Spacers
+   ========================================================= */
+
+.divider{
+  height: 1px;
+  background: var(--divider);
+  margin: 1.6rem 0;
+}
+
+.sub-divider{
+  width: 48px;
+  height: 1px;
+  background: var(--divider);
+  margin: 1.2rem 0;
+  opacity: 0.7;
+}
+
+.spacer-lg{ height: 2.4rem; }
+.spacer-xl{ height: 3.2rem; }
+
+
+/* =========================================================
+   9) About Quote Block (merged)
+   ========================================================= */
+
+.about-quote{
+  max-width: 720px;
+  margin: 3rem 0 3.5rem;
+  margin-left: 1.5rem;
+  padding-left: 1.2rem;
+  border-left: 2px solid var(--divider);
+}
+
+.quote-lead{
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.4;
+  margin: 0 0 0.6rem;
+  color: var(--text);
+}
+
+.quote-body{
+  font-size: 1.05rem;
+  line-height: 1.7;
+  margin: 0;
+  color: var(--muted);
+}
+
+.emphasis{
+  font-weight: 500;
+  color: var(--text);
+}
+
+
+/* =========================================================
+   10) Hybrid Diagram
+   ========================================================= */
+
+.hybrid-diagram{
+  display: block;
+  text-align: center;
+  max-width: 680px;
+  margin: 2.4rem auto 3rem;
+  color: var(--muted);
+}
+
+.hybrid-diagram svg{
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto 1rem;
+}
+
+.hybrid-diagram img{
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* SVG text via class so we can size it responsively */
+.hybrid-center{
+  font-size: 14px;
+  font-weight: 500;
+  fill: currentColor;
+}
+
+/* Legend: responsive pills */
+.hybrid-legend{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 0.6rem 0 0.9rem;
+}
+
+.legend-pill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(15,31,23,0.12);
+  background: rgba(255,255,255,0.9);
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.diagram-caption{
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--muted);
+  margin: 0;
+}
+
+
+/* =========================================================
+   11) Anchor/Scroll Offset (single system)
+   ========================================================= */
+
+html{
+  scroll-padding-top: var(--header-offset);
+}
+
+section,
+.tab-section,
+h1, h2, h3{
+  scroll-margin-top: var(--header-offset);
+}
+
+
+/* =========================================================
+   12) Figures / Images / Zoom
+   - Kept your figure sizing + zoom behaviour.
+   ========================================================= */
+
+figure{ margin: 0; }
+
+figure img{
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+}
+
+.figure-half{
+  max-width: 50%;
+  margin: 1.5rem auto;
+}
+
+.zoomable img{
+  width: 100%;
+  cursor: zoom-in;
+  transition: transform 0.25s ease;
+}
+
+.zoomable img:hover{
+  transform: scale(2);
+}
+
+.zoomable img:active{
+  transform: scale(1.5);
+  cursor: zoom-out;
+}
+
+
+/* =========================================================
+   13) Footer
+   ========================================================= */
+
+.site-footer{
+  font-size: 0.74rem;      /* align with nav pills */
+  padding: 0.7rem 0 1rem;  /* tighter vertical rhythm */
+}
+
+.footer-grid{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.site-footer .footer-grid{
+  gap: 0.6rem;
+}
+
+.footer-meta p{
+  margin: 0.05rem 0;
+  line-height: 1.35;
+  font-size: inherit;
+}
+
+.footer-links{
+  display: flex;
+  gap: 0.7rem;
+}
+
+.footer-links a{
+  font-size: 0.75rem;
+  text-decoration: none;
+  color: var(--muted);
+  line-height: 1.2;
+}
+.footer-links a:hover{
+  color: var(--text);
+  text-decoration: underline;
+}
+
+
+/* =========================================================
+   14) Page Theme
+   ========================================================= */
+
+body.sloths-page{
+  --bg: #FAF8F4;
+  --surface: #FFFFFF;
+  --text: #1C1A17;
+  --muted: #6E665E;
+  --divider: #D9CFC2;
+  --accent: #2F4A3C;
+  --accent-soft: #EFE8DF;
+  --shadow: 0 10px 28px rgba(28,26,23,0.10);
+}
+
+/* top spacing rule  */
+body.sloths-page .tab-section:first-of-type{
+  margin-top: 0.5rem;
+  padding: 4rem 0;
+}
+
+/* sloths page main panel */
+body.sloths-page main .tab-section{
+  padding: 4rem 0;
+}
+
+body.sloths-page main .tab-section .container{
+  background: rgba(255,255,255,0.88);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 1rem 2rem;
+}
+
+
+
+/* Contact typography */
+body.sloths-page h1{
+  font-size: clamp(2.2rem, 4.2vw, 3.1rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 0;
+}
+
+body.sloths-page p{
+  max-width: none;
+  margin: 1.05rem 0;
+  color: var(--text);
+}
+
+body.sloths-page .divider{
+  background: var(--divider);
+  margin: 1rem 0 1.8rem;
+  opacity: 0.95;
+}
+
+body.sloths-page a{
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+body.sloths-page a:hover{
+  text-decoration-thickness: 2px;
+}
+
+
+/* =========================================================
+   15) Contact Form 
+   ========================================================= */
+
+.contact-form{
+  margin-top: 1.2rem;
+  max-width: 720px;
+}
+
+.contact-form .form-row{
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.95rem 0;
+}
+
+.contact-form label{
+  font-weight: 550;
+  color: var(--text);
+}
+
+.contact-form input,
+.contact-form select,
+.contact-form textarea{
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+  outline: none;
+
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.contact-form textarea{
+  resize: vertical;
+  min-height: 140px;
+}
+
+.contact-form input:focus,
+.contact-form select:focus,
+.contact-form textarea:focus{
+  border-color: rgba(47,125,99,0.55);
+  box-shadow: 0 0 0 3px rgba(47,125,99,0.16);
+}
+
+.contact-form button{
+  margin-top: 0.6rem;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 1px solid rgba(15,31,23,0.12);
+  background: rgba(255,255,255,0.92);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.contact-form button:hover{
+  color: var(--text);
+  border-color: rgba(47,125,99,0.35);
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   16) NAV
+   ========================================================= */
+
+nav a,
+nav a:hover,
+nav a:focus,
+nav a:active,
+nav a.active{
+  text-decoration: none !important;
+}
+
+
+/* =========================================================
+   17) Small helpers
+   ========================================================= */
+
+.work-links{
+  font-size: 0.9em;
+  opacity: 0.85;
+}
+
+.profile-link{
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  text-decoration: none;
+}
+
+
+
+
+/* =========================================================
+   18) Mobile
+   ========================================================= */
+
+@media (max-width: 720px){
+  :root{
+    --header-offset: 1px;
+  }
+
+  /* Hybrid diagram mobile tuning */
+  .hybrid-diagram{ margin: 2rem auto 2.4rem; }
+  .diagram-caption{ font-size: 0.9rem; text-align: left; }
+  .hybrid-legend{ justify-content: flex-start; }
+  .legend-pill{ font-size: 0.82rem; }
+
+  /* Contact page mobile spacing */
+  body.sloths-page main .tab-section{
+    padding: 2rem 0;
+  }
+  body.sloths-page main .tab-section:first-of-type{
+    padding-top: 0.5rem;
+    padding: 4rem 0;
+  }
+  body.sloths-page main .tab-section + .tab-section{
+    padding: 4rem 0;
+  }
+  body.sloths-page main .tab-section .container{
+    padding: 0.5rem 1rem;
+  }
+  body.sloths-page p{
+    max-width: 100%;
+  }
+
+  /* Desktop dropdown menu width tweak (harmless even if desktop nav hidden) */
+  .nav-dropdown-menu{
+    left: auto;
+    right: 0;
+    min-width: 210px;
+  }
+
+    /* Headings */
+  h1{
+    font-size: clamp(1rem, 6vw, 1rem);
+    line-height: 1.2;
+  }
+
+  h2{
+    font-size:90.rem;
+    line-height: 1.3;
+  }
+
+  h3{
+    font-size: 0.9rem;
+    line-height: 1.35;
+  }
+
+  /* Body text */
+  p{
+    font-size: 0.8rem;
+    line-height: 1.55;
+  }
+
+  /* Lead / hero text */
+  .lead{
+    font-size: 1.45rem;
+    line-height: 1.25;
+  }
+
+  /* Quote blocks */
+  .quote-lead{
+    font-size: 1.1rem;
+    line-height: 1.4;
+  }
+
+  .quote-body{
+    font-size: 0.9rem;
+  }
+
+  .about-quote{
+    margin: 0.2rem 0 0.2rem 0;
+  }
+
+  .about-quote p{
+    margin: 0.2rem 0 0.2rem 0;
+  }
+
+  .about-quote + .pill{
+    margin-top: 0.2rem;
+  }
+
+  /* Pills / small UI text */
+  .pill,
+  .legend-pill{
+    font-size: 0.7rem;
+  }
+  .about-pill{
+    margin: 0.2rem 0 0.2rem 0;
+  }
+
+  .about-pill p{
+    margin: 0.2rem 0 0.2rem 0;
+  }
+}
+
+
+@media (max-width: 960px){
+  .footer-grid{
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .site-footer{
+    font-size: 0.6rem;   /* smaller, still readable */
+    line-height: 0.8;
+  }
+
+  .site-footer p,
+  .site-footer a{
+    font-size: inherit;
+  }
+}
+
+
+/* =========================================================
+   19) Mobile Navigation — Hamburger + Panel
+   ========================================================= */
+
+/* Hamburger button (mobile only) */
+.nav-toggle{
+  display: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,31,23,0.14);
+  background: rgba(255,255,255,0.92);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+
+  position: absolute;
+  right: 0.6rem;
+  top: 0.6rem;
+}
+
+.nav-toggle span{
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  height: 2px;
+  background: var(--muted);
+  border-radius: 2px;
+}
+.nav-toggle span:nth-child(1){ top: 14px; }
+.nav-toggle span:nth-child(2){ top: 21px; }
+.nav-toggle span:nth-child(3){ top: 28px; }
+
+/* Mobile behaviour: hide desktop nav, show hamburger */
+@media (max-width: 960px){
+  .main-nav{ display: none !important; }
+  .nav-toggle{ display: inline-flex; }
+}
+
+
+/* Panel: floating, not full screen */
+.mobile-nav{
+  position: fixed;
+  top: 0%;
+  right: 0%;
+  max-height: 120vh;
+  max-width: 300px;
+  overflow-y: auto;
+  z-index: 3000;
+
+  display: none;
+  padding: 16px 16px 18px;
+
+  background: rgba(242,247,241,0.85);
+  color: var(--text);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(15,31,23,0.18);
+}
+
+.mobile-nav.is-open{ display: block; }
+body.nav-open{ overflow: hidden; }
+
+/* Panel top row */
+.mobile-nav__top{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mobile-nav__brand{
+  color: var(--accent);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.mobile-nav__brand span{
+  color: var(--accent);
+  opacity: 0.9;
+}
+
+.mobile-nav__close{
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(15,31,23,0.14);
+  background: rgba(255,255,255,0.92);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* Menu container */
+.mobile-nav__menu{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* Unified button system (top-level + links)
+   - Top-level expandable items are <summary>
+   - Non-expandable items should use .mobile-link
+*/
+.mobile-acc > summary,
+.mobile-link{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 16px 18px;
+  border-radius: 14px;
+
+  background: rgba(255,255,255,0.95);
+  border: 1px solid var(--divider);
+  box-shadow: var(--shadow);
+
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  text-decoration: none;
+}
+
+/* Summary: hide default marker */
+.mobile-acc > summary{
+  list-style: none;
+}
+.mobile-acc > summary::-webkit-details-marker{
+  display: none;
+}
+
+/* Chevron only for expandable items */
+.mobile-acc > summary::after{
+  content: "▾";
+  font-size: 1.5rem;   /* arrow size */
+  font-weight: 700;
+  line-height: 1;
+  color: var(--muted);
+  margin-left: 10px;
+}
+.mobile-acc[open] > summary::after{
+  content: "▴";
+}
+
+/* Sub-items inside open accordion */
+.mobile-acc a{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-top: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+
+  background: rgba(255,255,255,0.85);
+  border: 1px solid rgba(15,31,23,0.12);
+  box-shadow: 0 8px 20px rgba(15,31,23,0.06);
+
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+
+  text-decoration: none;
+}
+
+/* Hover / tap feedback */
+.mobile-acc > summary:hover,
+.mobile-acc a:hover,
+.mobile-link:hover{
+  background: var(--accent-soft);
+  border-color: rgba(47,125,99,0.35);
+}
+
+/* Privacy note inside panel */
+.mobile-nav__privacy-note{
+  margin: 0.1rem 0 0.1rem;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+/* CTA (kept centered, not pinned) */
+.mobile-nav__cta{
+  margin: 2rem 0 1.2rem;
+  display: flex;
+  justify-content: center;
+}
+
+/* CTA buttons */
+.mobile-btn{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 48px;
+  border-radius: 18px;
+  text-decoration: none;
+
+  font-weight: 450;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 0.6rem;
+}
+
+.mobile-btn--primary{
+  min-width: 78%;
+  height: auto;
+  padding: 16px 28px;
+
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+
+  background: var(--accent);
+  color: #ffffff !important;
+
+  box-shadow: 0 12px 28px rgba(15,31,23,0.22);
+}
+
+/* Optional outline style if you use a second CTA */
+.mobile-btn--outline{
+  min-width: 78%;
+  height: auto;
+  padding: 16px 28px;
+
+  background: rgba(255,255,255,0.92);
+  color: var(--accent);
+  border: 1px solid rgba(47,125,99,0.35);
+}
+
+
+/* =========================================================
+   END
+   ========================================================= */
