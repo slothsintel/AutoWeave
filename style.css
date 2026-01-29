@@ -1019,6 +1019,104 @@ body.nav-open{ overflow: hidden; }
   border: 1px solid rgba(47,125,99,0.35);
 }
 
+/* =========================================================
+   20) AutoWeave Workbench (Variant A: fixed-height dashboard)
+   - Keeps existing palette + card styling.
+   - Minimal page scroll; panes scroll internally.
+   ========================================================= */
+
+.aw-workbench{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+
+  /* Fixed-height workbench (app-like) */
+  height: clamp(560px, 74vh, 860px);
+}
+
+/* Pane uses the same “card” language */
+.aw-pane{
+  background: rgba(255,255,255,0.90);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden; /* keeps inner scroll clean */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pane header stays visible */
+.aw-pane__header{
+  padding: 1rem 1.2rem 0.2rem;
+  flex: 0 0 auto;
+}
+.aw-pane__title{
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.aw-pane__subtitle{
+  margin: 0.35rem 0 0.9rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* Pane body scrolls (always) */
+.aw-pane__body{
+  padding: 0 1.2rem 1.2rem;
+  display: grid;
+  gap: 1rem;
+
+  flex: 1 1 auto;
+  min-height: 0;        /* IMPORTANT for flex + overflow */
+  overflow: auto;
+}
+
+/* Card blocks inside panes */
+.aw-card{
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 16px;
+  padding: 1rem;
+}
+.aw-card__title{
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+}
+.aw-card__desc{
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.aw-steps{
+  margin: 0.2rem 0 0.8rem 1.1rem;
+}
+.aw-checkpoint__row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.aw-checkpoint__note{
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Mobile: stack panes, revert to normal scrolling */
+@media (max-width: 960px){
+  .aw-workbench{
+    grid-template-columns: 1fr;
+    height: auto;            /* no fixed height on mobile */
+  }
+  .aw-pane__body{
+    overflow: visible;
+    min-height: auto;
+  }
+}
+
+.aw-workbench, .aw-pane, .aw-pane__body { max-width: 100%; }
 
 /* =========================================================
    END

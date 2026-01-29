@@ -7,12 +7,6 @@
   <meta name="description" content="Human-guided ETL: async threads, merges, and checkpoints for reliable pipelines." />
   <link rel="stylesheet" href="style.css" />
 
-  <!-- (Optional) favicons if you add them later
-  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
-  <link rel="icon" href="assets/favicon.ico">
-  -->
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,9 +14,7 @@
 
 <body class="sloths-page">
   <header class="site-header">
-    <!-- EXACT same header container structure as slothsintel_index.html -->
     <div class="container nav-container">
-      <!-- Logo block (same pattern) -->
       <div class="logo">
         <a href="index.html" aria-label="AutoWeave home">
           <img class="logo-img" src="assets/autoweave.svg" alt="AutoWeave logo" />
@@ -30,27 +22,29 @@
         <span class="logo-text">Auto<span>Weave</span></span>
       </div>
 
-      <!-- Desktop nav (same pattern: dropdown + top-level links) -->
       <nav class="main-nav" aria-label="Primary navigation">
-        <!-- HOME dropdown -->
         <details class="nav-dropdown">
           <summary class="nav-link active" href="page">home</summary>
           <div class="nav-dropdown-menu" role="menu" aria-label="AutoWeave sections">
             <a class="nav-dropdown-link" href="index.html#overview" role="menuitem">overview</a>
             <a class="nav-dropdown-link" href="index.html#demo" role="menuitem">demo</a>
-            <a class="nav-dropdown-link" href="index.html#how" role="menuitem">how it works</a>
             <a class="nav-dropdown-link" href="index.html#usecases" role="menuitem">use cases</a>
             <a class="nav-dropdown-link" href="index.html#roadmap" role="menuitem">roadmap</a>
           </div>
         </details>
 
-        <!-- Keep the rest as top-level (same style) -->
-        <a class="nav-link" href="https://slothsintel.com/products.html" target="_blank" rel="noopener">products</a>
-        <a class="nav-link" href="https://github.com/slothsintel/AutoWeave" target="_blank" rel="noopener">github</a>
+      <nav class="main-nav" aria-label="Primary navigation">
+        <details class="nav-dropdown">
+          <summary class="nav-link" href="page">other products</summary>
+          <div class="nav-dropdown-menu" role="menu" aria-label="AutoWeave sections">
+            <a class="nav-dropdown-link" href="https://autotrac.slothsintel.com" role="menuitem">AutoTrac</a>
+            <a class="nav-dropdown-link" href="https://autopred.slothsintel.com" role="menuitem">AutoPred</a>
+            <a class="nav-dropdown-link" href="https://autovisual.slothsintel.com" role="menuitem">AutoVisual</a>
+          </div>
+        </details>
         <a class="nav-link" href="https://slothsintel.com/contact.html" target="_blank" rel="noopener">contact</a>
       </nav>
 
-      <!-- Mobile hamburger (mobile only) — EXACT same markup -->
       <button class="nav-toggle" type="button"
               aria-label="Open menu"
               aria-controls="mobile-nav"
@@ -58,7 +52,6 @@
         <span></span><span></span><span></span>
       </button>
 
-      <!-- Mobile overlay nav — EXACT same structure/classes -->
       <div id="mobile-nav" class="mobile-nav" aria-hidden="true">
         <div class="mobile-nav__top">
           <div class="mobile-nav__brand">Auto<span>Weave</span></div>
@@ -70,18 +63,15 @@
             <a class="mobile-btn mobile-btn--primary" href="#demo">Try demo</a>
           </div>
 
-          <!-- Home (expandable) -->
           <details class="mobile-acc">
             <summary>Home</summary>
             <a href="index.html#overview">Overview</a>
             <a href="index.html#demo">Demo</a>
-            <a href="index.html#how">How it works</a>
             <a href="index.html#usecases">Use cases</a>
             <a href="index.html#roadmap">Roadmap</a>
-            <a href="index.html#contact">Contact</a>
+
           </details>
 
-          <!-- Top-level links -->
           <a class="mobile-link" href="https://github.com/slothsintel/AutoWeave" target="_blank" rel="noopener">GitHub</a>
           <a class="mobile-link" href="https://slothsintel.com/products.html" target="_blank" rel="noopener">Products</a>
           <a class="mobile-link" href="https://slothsintel.com" target="_blank" rel="noopener">SlothsIntel.com</a>
@@ -100,14 +90,13 @@
   <main>
     <!-- OVERVIEW -->
     <section id="overview" class="tab-section">
-      <div class="container">
+    <div class="container">
         <h1>Overview</h1>
         <div class="spacer-lg"></div>
 
-        <!-- Same “about-quote” block style as Sloths Intel -->
         <div class="about-quote">
-          <p class="quote-lead">Async inputs.</p>
-          <p class="quote-body">Merges with judgement. Clean outputs you can trust.</p>
+        <p class="quote-lead">Async inputs.</p>
+        <p class="quote-body">Merged with judgement. Clean outputs you can trust.</p>
         </div>
 
         <div class="spacer-xl"></div>
@@ -115,13 +104,14 @@
 
         <div class="divider"></div>
         <p>
-          AutoWeave sits downstream of AutoTrac: logs in, structure out.
-          It turns messy, inconsistent inputs into reliable datasets using automated steps plus clear checkpoints.
+        AutoWeave sits downstream of AutoTrac, turning messy, inconsistent inputs
+        into reliable datasets through automated pipelines and human checkpoints.
         </p>
-      </div>
+    </div>
     </section>
 
-    <!-- DEMO -->
+
+    <!-- WORKBENCH (Variant A: fixed-height dashboard) -->
     <section id="demo" class="tab-section">
       <div class="container">
         <h1>Demo</h1>
@@ -133,45 +123,110 @@
 
         <div class="spacer-lg"></div>
 
-        <!-- Reuse your existing form styling hooks -->
-        <div class="contact-form" style="max-width: 860px;">
-          <div class="form-row">
-            <label for="fileInput">Upload a CSV</label>
-            <input id="fileInput" type="file" accept=".csv,text/csv" />
-          </div>
+        <div class="aw-workbench">
+          <!-- LEFT PANE -->
+          <section class="aw-pane" aria-label="Build (inputs and pipeline)">
+            <div class="aw-pane__header">
+              <h3 class="aw-pane__title">Build</h3>
+              <p class="aw-pane__subtitle">Inputs, threads, merge rules</p>
+            </div>
 
-          <div class="form-row">
-            <label>Preview</label>
-            <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
-          </div>
+            <div class="aw-pane__body">
+              <div class="aw-card">
+                <h4 class="aw-card__title">Input</h4>
+                <p class="aw-card__desc">Upload a CSV to start. Later: AutoTrac export, JSON, connectors.</p>
 
-          <div class="form-row">
-            <label>Quick stats</label>
-            <textarea id="stats" readonly placeholder="Rows/columns + basic stats will appear here…"></textarea>
-          </div>
+                <div class="contact-form" style="max-width: 100%;">
+                  <div class="form-row">
+                    <label for="fileInput">Upload a CSV</label>
+                    <input id="fileInput" type="file" accept=".csv,text/csv" />
+                  </div>
 
-          <button type="button" id="clearBtn">Clear</button>
+                  <button type="button" id="clearBtn">Clear</button>
+                </div>
+              </div>
+
+              <div class="aw-card">
+                <h4 class="aw-card__title">Pipeline steps</h4>
+                <p class="aw-card__desc">A placeholder list — we’ll make this draggable next.</p>
+
+                <ul class="aw-steps">
+                  <li><span class="emphasis">Parse</span> → detect columns</li>
+                  <li><span class="emphasis">Clean</span> → trim, normalise</li>
+                  <li><span class="emphasis">Merge</span> → 2→1 and 3→1 checkpoints</li>
+                  <li><span class="emphasis">Export</span> → CSV / JSON recipe</li>
+                </ul>
+              </div>
+
+              <div class="aw-card">
+                <h4 class="aw-card__title">Human checkpoint</h4>
+                <p class="aw-card__desc">
+                  This is where “correct” is decided with context. Later: review queue + rationale logging.
+                </p>
+
+                <div class="aw-checkpoint">
+                  <div class="aw-checkpoint__row">
+                    <span class="legend-pill">2 → 1 merge</span>
+                    <span class="legend-pill">3 → 1 merge</span>
+                    <span class="legend-pill">Create thread</span>
+                  </div>
+                  <p class="aw-checkpoint__note">
+                    (Static stub for now — no backend needed to prototype the flow.)
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- RIGHT PANE -->
+          <section class="aw-pane" aria-label="See (preview and visualisation)">
+            <div class="aw-pane__header">
+              <h3 class="aw-pane__title">See</h3>
+              <p class="aw-pane__subtitle">Preview, stats, and thread diagram</p>
+            </div>
+
+            <div class="aw-pane__body">
+              <div class="aw-card">
+                <h4 class="aw-card__title">Preview</h4>
+                <p class="aw-card__desc">First ~30 lines of your CSV.</p>
+
+                <div class="contact-form" style="max-width: 100%;">
+                  <div class="form-row">
+                    <label>Preview</label>
+                    <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div class="aw-card">
+                <h4 class="aw-card__title">Quick stats</h4>
+                <p class="aw-card__desc">Rows/columns (approx) + next steps.</p>
+
+                <div class="contact-form" style="max-width: 100%;">
+                  <div class="form-row">
+                    <label>Quick stats</label>
+                    <textarea id="stats" readonly placeholder="Rows/columns + basic stats will appear here…"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div class="aw-card">
+                <h4 class="aw-card__title">Threads</h4>
+                <p class="aw-card__desc">Async threads merge into a single output (with judgement at merge points).</p>
+
+                <div class="hybrid-diagram" style="margin: 1rem auto 1.2rem;">
+                  <img src="assets/autoweave-hex.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
+                  <div class="hybrid-legend">
+                    <span class="legend-pill">Async inputs</span>
+                    <span class="legend-pill">Merge points</span>
+                    <span class="legend-pill">Human checkpoints</span>
+                    <span class="legend-pill">Clean outputs</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-      </div>
-    </section>
-
-    <!-- HOW IT WORKS -->
-    <section id="how" class="tab-section">
-      <div class="container">
-        <h1>How it works</h1>
-        <div class="divider"></div>
-
-        <p>
-          AutoWeave treats ETL as asynchronous “threads” that converge into a single truth.
-          Some threads are created mid-flow; merge points represent reconciliation and decision-making.
-        </p>
-
-        <figure class="figure-half zoomable">
-          <img src="assets/autoweave-hex.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
-          <figcaption>
-            Threads merge into reliable outputs — with checkpoints for human judgement.
-          </figcaption>
-        </figure>
       </div>
     </section>
 
@@ -208,7 +263,8 @@
       </div>
     </section>
 
-  <!-- Footer injection (same approach as slothsintel_index.html) -->
+
+  <!-- Footer injection -->
   <div id="site-footer"></div>
 
   <script>
@@ -216,11 +272,12 @@
       .then(res => res.text())
       .then(html => {
         document.getElementById("site-footer").innerHTML = html;
-        document.getElementById("year").textContent = new Date().getFullYear();
+        const yearEl = document.getElementById("year");
+        if (yearEl) yearEl.textContent = new Date().getFullYear();
       });
   </script>
 
-  <!-- Mobile nav script — same structure/behaviour as slothsintel_index.html -->
+  <!-- Mobile nav script -->
   <script>
     const toggle = document.querySelector(".nav-toggle");
     const mobileNav = document.getElementById("mobile-nav");
@@ -253,7 +310,6 @@
       if(e.key === "Escape") closeNav();
     });
 
-    /* click outside closes */
     document.addEventListener("click", (e) => {
       if (!mobileNav.classList.contains("is-open")) return;
 
