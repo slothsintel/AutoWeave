@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoWeave — Human-guided ETL</title>
+  <meta name="description" content="Human-guided ETL: async threads, merges, and checkpoints for reliable pipelines." />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- (Optional) favicons if you add them later
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+  <link rel="icon" href="assets/favicon.ico">
+  -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="sloths-page">
+  <header class="site-header">
+    <!-- EXACT same header container structure as slothsintel_index.html -->
+    <div class="container nav-container">
+      <!-- Logo block (same pattern) -->
+      <div class="logo">
+        <a href="index.html" aria-label="AutoWeave home">
+          <img class="logo-img" src="assets/autoweave.svg" alt="AutoWeave logo" />
+        </a>
+        <span class="logo-text">Auto<span>Weave</span></span>
+      </div>
+
+      <!-- Desktop nav (same pattern: dropdown + top-level links) -->
+      <nav class="main-nav" aria-label="Primary navigation">
+        <!-- HOME dropdown -->
+        <details class="nav-dropdown">
+          <summary class="nav-link active" href="page">home</summary>
+          <div class="nav-dropdown-menu" role="menu" aria-label="AutoWeave sections">
+            <a class="nav-dropdown-link" href="index.html#overview" role="menuitem">overview</a>
+            <a class="nav-dropdown-link" href="index.html#demo" role="menuitem">demo</a>
+            <a class="nav-dropdown-link" href="index.html#how" role="menuitem">how it works</a>
+            <a class="nav-dropdown-link" href="index.html#usecases" role="menuitem">use cases</a>
+            <a class="nav-dropdown-link" href="index.html#roadmap" role="menuitem">roadmap</a>
+          </div>
+        </details>
+
+        <!-- Keep the rest as top-level (same style) -->
+        <a class="nav-link" href="https://slothsintel.com/products.html" target="_blank" rel="noopener">products</a>
+        <a class="nav-link" href="https://github.com/slothsintel/AutoWeave" target="_blank" rel="noopener">github</a>
+        <a class="nav-link" href="https://slothsintel.com/contact.html" target="_blank" rel="noopener">contact</a>
+      </nav>
+
+      <!-- Mobile hamburger (mobile only) — EXACT same markup -->
+      <button class="nav-toggle" type="button"
+              aria-label="Open menu"
+              aria-controls="mobile-nav"
+              aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+
+      <!-- Mobile overlay nav — EXACT same structure/classes -->
+      <div id="mobile-nav" class="mobile-nav" aria-hidden="true">
+        <div class="mobile-nav__top">
+          <div class="mobile-nav__brand">Auto<span>Weave</span></div>
+          <button class="mobile-nav__close" type="button" aria-label="Close menu">✕</button>
+        </div>
+
+        <nav class="mobile-nav__menu" aria-label="Mobile navigation">
+          <div class="mobile-nav__cta">
+            <a class="mobile-btn mobile-btn--primary" href="#demo">Try demo</a>
+          </div>
+
+          <!-- Home (expandable) -->
+          <details class="mobile-acc">
+            <summary>Home</summary>
+            <a href="index.html#overview">Overview</a>
+            <a href="index.html#demo">Demo</a>
+            <a href="index.html#how">How it works</a>
+            <a href="index.html#usecases">Use cases</a>
+            <a href="index.html#roadmap">Roadmap</a>
+            <a href="index.html#contact">Contact</a>
+          </details>
+
+          <!-- Top-level links -->
+          <a class="mobile-link" href="https://github.com/slothsintel/AutoWeave" target="_blank" rel="noopener">GitHub</a>
+          <a class="mobile-link" href="https://slothsintel.com/products.html" target="_blank" rel="noopener">Products</a>
+          <a class="mobile-link" href="https://slothsintel.com" target="_blank" rel="noopener">SlothsIntel.com</a>
+
+          <p class="mobile-nav__privacy-note">
+            Static demo site. Backend + accounts will be added later.
+          </p>
+
+          <a class="mobile-link" href="privacy.html">Privacy</a>
+          <a class="mobile-link" href="terms.html">Terms</a>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- OVERVIEW -->
+    <section id="overview" class="tab-section">
+      <div class="container">
+        <h1>Overview</h1>
+        <div class="spacer-lg"></div>
+
+        <!-- Same “about-quote” block style as Sloths Intel -->
+        <div class="about-quote">
+          <p class="quote-lead">Async inputs.</p>
+          <p class="quote-body">Merges with judgement. Clean outputs you can trust.</p>
+        </div>
+
+        <div class="spacer-xl"></div>
+        <p class="pill">Human-guided ETL for real-world data.</p>
+
+        <div class="divider"></div>
+        <p>
+          AutoWeave sits downstream of AutoTrac: logs in, structure out.
+          It turns messy, inconsistent inputs into reliable datasets using automated steps plus clear checkpoints.
+        </p>
+      </div>
+    </section>
+
+    <!-- DEMO -->
+    <section id="demo" class="tab-section">
+      <div class="container">
+        <h1>Demo</h1>
+        <div class="divider"></div>
+
+        <p>
+          Upload a CSV to preview it and compute quick summaries. This runs entirely in your browser (no database yet).
+        </p>
+
+        <div class="spacer-lg"></div>
+
+        <!-- Reuse your existing form styling hooks -->
+        <div class="contact-form" style="max-width: 860px;">
+          <div class="form-row">
+            <label for="fileInput">Upload a CSV</label>
+            <input id="fileInput" type="file" accept=".csv,text/csv" />
+          </div>
+
+          <div class="form-row">
+            <label>Preview</label>
+            <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
+          </div>
+
+          <div class="form-row">
+            <label>Quick stats</label>
+            <textarea id="stats" readonly placeholder="Rows/columns + basic stats will appear here…"></textarea>
+          </div>
+
+          <button type="button" id="clearBtn">Clear</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="how" class="tab-section">
+      <div class="container">
+        <h1>How it works</h1>
+        <div class="divider"></div>
+
+        <p>
+          AutoWeave treats ETL as asynchronous “threads” that converge into a single truth.
+          Some threads are created mid-flow; merge points represent reconciliation and decision-making.
+        </p>
+
+        <figure class="figure-half zoomable">
+          <img src="assets/autoweave-hex.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
+          <figcaption>
+            Threads merge into reliable outputs — with checkpoints for human judgement.
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- USE CASES -->
+    <section id="usecases" class="tab-section">
+      <div class="container">
+        <h1>Use cases</h1>
+        <div class="divider"></div>
+
+        <div class="about-quote">
+          <p class="quote-lead">Correctness depends on context.</p>
+          <p class="quote-body">AutoWeave makes that context explicit and repeatable.</p>
+        </div>
+
+        <div class="spacer-xl"></div>
+
+        <p>
+          Examples: POS exports + bank statements, operational logs, messy CRM dumps, supplier feeds,
+          and any workflow where edge cases must be resolved with rationale.
+        </p>
+      </div>
+    </section>
+
+    <!-- ROADMAP -->
+    <section id="roadmap" class="tab-section">
+      <div class="container">
+        <h1>Roadmap</h1>
+        <div class="divider"></div>
+
+        <p>
+          Phase 1: static site + in-browser demo. Phase 2: draggable transforms + pipeline steps + export.
+          Phase 3: Render backend + Postgres + login + saved projects.
+        </p>
+      </div>
+    </section>
+
+  <!-- Footer injection (same approach as slothsintel_index.html) -->
+  <div id="site-footer"></div>
+
+  <script>
+    fetch("footer.html")
+      .then(res => res.text())
+      .then(html => {
+        document.getElementById("site-footer").innerHTML = html;
+        document.getElementById("year").textContent = new Date().getFullYear();
+      });
+  </script>
+
+  <!-- Mobile nav script — same structure/behaviour as slothsintel_index.html -->
+  <script>
+    const toggle = document.querySelector(".nav-toggle");
+    const mobileNav = document.getElementById("mobile-nav");
+    const closeBtn = document.querySelector(".mobile-nav__close");
+
+    function openNav(){
+      mobileNav.classList.add("is-open");
+      mobileNav.setAttribute("aria-hidden", "false");
+      toggle?.setAttribute("aria-expanded", "true");
+      document.body.classList.add("nav-open");
+    }
+
+    function closeNav(){
+      mobileNav.classList.remove("is-open");
+      mobileNav.setAttribute("aria-hidden", "true");
+      toggle?.setAttribute("aria-expanded", "false");
+      document.body.classList.remove("nav-open");
+    }
+
+    toggle?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openNav();
+    });
+
+    closeBtn?.addEventListener("click", closeNav);
+
+    mobileNav?.querySelectorAll("a").forEach(a => a.addEventListener("click", closeNav));
+
+    document.addEventListener("keydown", (e) => {
+      if(e.key === "Escape") closeNav();
+    });
+
+    /* click outside closes */
+    document.addEventListener("click", (e) => {
+      if (!mobileNav.classList.contains("is-open")) return;
+
+      const target = e.target;
+      if (!(target instanceof Node)) return;
+
+      const clickedInsidePanel = mobileNav.contains(target);
+      const clickedToggle = toggle && toggle.contains(target);
+
+      if (!clickedInsidePanel && !clickedToggle) closeNav();
+    });
+  </script>
+
+  <!-- Keep your existing AutoWeave CSV demo logic -->
+  <script src="./script.js"></script>
+</body>
+</html>
