@@ -97,7 +97,7 @@
         <div class="divider"></div>
 
         <p>
-          Upload a CSV to preview it and compute quick summaries. This runs entirely in your browser (no database yet).
+          Upload a CSV to preview structure and generate quick summaries. Processing runs locally in your browser (no database required at this stage).
         </p>
 
         <div class="spacer-lg"></div>
@@ -113,7 +113,7 @@
             <div class="aw-pane__body">
               <div class="aw-card">
                 <h4 class="aw-card__title">Input</h4>
-                <p class="aw-card__desc">Upload a CSV to start. Later: AutoTrac export, JSON, connectors.</p>
+                <p class="aw-card__desc">Upload a CSV to begin. Future integrations: AutoTrac export, JSON inputs, and external data connectors.</p>
 
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
@@ -127,7 +127,7 @@
 
               <div class="aw-card">
                 <h4 class="aw-card__title">Pipeline steps</h4>
-                <p class="aw-card__desc">A placeholder list — we’ll make this draggable next.</p>
+                <p class="aw-card__desc">Prototype pipeline flow — draggable transforms planned in the next iteration.</p>
 
                 <ul class="aw-steps">
                   <li><span class="emphasis">Parse</span> → detect columns</li>
@@ -140,7 +140,7 @@
               <div class="aw-card">
                 <h4 class="aw-card__title">Human checkpoint</h4>
                 <p class="aw-card__desc">
-                  This is where “correct” is decided with context. Later: review queue + rationale logging.
+                  This is where correctness is evaluated in context. Future development includes structured review queues and rationale logging for auditability.
                 </p>
 
                 <div class="aw-checkpoint">
@@ -150,7 +150,7 @@
                     <span class="legend-pill">Create thread</span>
                   </div>
                   <p class="aw-checkpoint__note">
-                    (Static stub for now — no backend needed to prototype the flow.)
+                    (Currently a front-end prototype — backend services will support persistence and collaboration.)
                   </p>
                 </div>
               </div>
@@ -179,7 +179,9 @@
 
               <div class="aw-card">
                 <h4 class="aw-card__title">Quick stats</h4>
-                <p class="aw-card__desc">Rows/columns (approx) + next steps.</p>
+                <p class="aw-card__desc">
+                    Row and column summary with indicative structure metrics.
+                </p>
 
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
@@ -191,7 +193,9 @@
 
               <div class="aw-card">
                 <h4 class="aw-card__title">Threads</h4>
-                <p class="aw-card__desc">Async threads merge into a single output (with judgement at merge points).</p>
+                <p class="aw-card__desc">
+                    Asynchronous data threads merge into a single structured output, with human checkpoints at critical merge points.
+                </p>
 
                 <div class="hybrid-diagram" style="margin: 1rem auto 1.2rem;">
                   <img src="assets/autoweave-hex.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
@@ -217,14 +221,14 @@
 
         <div class="about-quote">
           <p class="quote-lead">Correctness depends on context.</p>
-          <p class="quote-body">AutoWeave makes that context explicit and repeatable.</p>
+          <p class="quote-body">AutoWeave makes that context structured, transparent, and repeatable.</p>
         </div>
 
         <div class="spacer-xl"></div>
 
         <p>
-          Examples: POS exports + bank statements, operational logs, messy CRM dumps, supplier feeds,
-          and any workflow where edge cases must be resolved with rationale.
+          Example workflows include POS exports with bank statements, operational logs, CRM extracts, supplier feeds, 
+          and any data process where edge cases require contextual resolution with documented rationale.
         </p>
       </div>
     </section>
