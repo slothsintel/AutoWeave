@@ -23,7 +23,7 @@
       </div>
 
       <nav class="main-nav">
-        <a class="nav-link active" href="index.html" target="_blank" rel="noopener">home</a>
+        <a class="nav-link" href="index.html" target="_blank" rel="noopener">home</a>
 
         <details class="nav-dropdown">
           <summary class="nav-link" href="page">technology</summary>
@@ -34,7 +34,7 @@
         </details>
 
         <details class="nav-dropdown">
-          <summary class="nav-link" href="page">roadmap</summary>
+          <summary class="nav-link active" href="page">roadmap</summary>
           <div class="nav-dropdown-menu" role="menu" aria-label="AutoWeave sections">
             <a class="nav-dropdown-link" href="roadmap.html#autoweave" role="menuitem">AutoWeave</a>
             <a class="nav-dropdown-link" href="roadmap.html#productsuite" role="menuitem">Product Suite</a>
@@ -86,26 +86,31 @@
   </header>
 
   <main>
-    <!-- OVERVIEW -->
-    <section id="overview" class="tab-section">
-    <div class="container">
-        <h1>Overview</h1>
-        <div class="spacer-lg"></div>
 
-        <div class="about-quote">
-        <p class="quote-lead">Async inputs.</p>
-        <p class="quote-body">Merged with judgement. Clean outputs you can trust.</p>
-        </div>
-
-        <div class="spacer-xl"></div>
-        <p class="pill">Human-guided ETL for real-world data.</p>
-
+    <!-- ROADMAP -->
+    <section id="autoweave" class="tab-section">
+      <div class="container">
+        <h1>AutoWeave</h1>
         <div class="divider"></div>
+
         <p>
-        AutoWeave sits downstream of AutoTrac, turning messy, inconsistent inputs
-        into reliable datasets through automated pipelines and human checkpoints.
+          Phase 1: static site + in-browser demo. Phase 2: draggable transforms + pipeline steps + export.
+          Phase 3: Render backend + Postgres + login + saved projects.
         </p>
-    </div>
+      </div>
+    </section>
+
+    <!-- PRODUCT -->
+    <section id="productsuite" class="tab-section">
+      <div class="container">
+        <h1>Product Suite</h1>
+        <div class="divider"></div>
+
+        <p>
+          Phase 1: static site + in-browser demo. Phase 2: draggable transforms + pipeline steps + export.
+          Phase 3: Render backend + Postgres + login + saved projects.
+        </p>
+      </div>
     </section>
 
   <!-- Footer injection -->
