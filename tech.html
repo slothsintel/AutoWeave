@@ -28,7 +28,8 @@
         <details class="nav-dropdown">
           <summary class="nav-link active" href="page">technology</summary>
           <div class="nav-dropdown-menu" role="menu" aria-label="AutoWeave sections">
-            <a class="nav-dropdown-link" href="tech.html#demo" role="menuitem">demo</a>
+            <a class="nav-dropdown-link" href="tech.html#guided" role="menuitem">guided example</a>
+            <a class="nav-dropdown-link" href="tech.html#workbench" role="menuitem">interactive workbench</a>
             <a class="nav-dropdown-link" href="tech.html#usecases" role="menuitem">use cases</a>
           </div>
         </details>
@@ -40,6 +41,7 @@
             <a class="nav-dropdown-link" href="roadmap.html#productsuite" role="menuitem">Products suite</a>
           </div>
         </details>
+
         <a class="nav-link" href="https://slothsintel.com/contact.html" target="_blank" rel="noopener">contact</a>
       </nav>
 
@@ -58,14 +60,15 @@
 
         <nav class="mobile-nav__menu" aria-label="Mobile navigation">
           <div class="mobile-nav__cta">
-            <a class="mobile-btn mobile-btn--primary" href="tech.html#demo">Try demo</a>
+            <a class="mobile-btn mobile-btn--primary" href="tech.html#workbench">Try workbench</a>
           </div>
 
           <a class="mobile-link" href="index.html" target="_blank" rel="noopener">home</a>
-          
-          <details class="mobile-acc">
+
+          <details class="mobile-acc" open>
             <summary>technology</summary>
-            <a href="tech.html#demo">Demo</a>
+            <a href="tech.html#guided">Guided example</a>
+            <a href="tech.html#workbench">Interactive workbench</a>
             <a href="tech.html#usecases">Use cases</a>
           </details>
 
@@ -90,14 +93,68 @@
 
   <main>
 
-    <!-- WORKBENCH (Variant A: fixed-height dashboard) -->
-    <section id="demo" class="tab-section">
+    <!-- GUIDED EXAMPLE -->
+    <section id="guided" class="tab-section">
       <div class="container">
-        <h1>Demo</h1>
+        <h1>Guided example</h1>
         <div class="divider"></div>
 
         <p>
-          Upload a CSV to preview structure and generate quick summaries. Processing runs locally in your browser (no database required at this stage).
+          Start here to understand the structure and the “threads → merge → checkpoint” model.
+          This page runs locally in your browser (no database required at this stage).
+        </p>
+
+        <div class="spacer-lg"></div>
+
+        <div class="aw-card">
+          <h4 class="aw-card__title">Example dataset</h4>
+          <p class="aw-card__desc">
+            Use a known-good sample (AutoTrac-style CSV) to see a clean pipeline outcome before trying your own exports.
+          </p>
+
+          <div class="contact-form" style="max-width: 100%;">
+            <div class="form-row">
+              <label>What you’ll see</label>
+              <textarea readonly>
+- A clean CSV preview (first ~30 lines)
+- Row/column summary + basic structure metrics
+- Thread merge diagram + checkpoint concepts
+              </textarea>
+            </div>
+
+            <!-- Optional hook (safe even if unused): you can wire this later in script.js -->
+            <button type="button" id="sampleBtn">Load sample (AutoTrac CSV)</button>
+          </div>
+
+          <div class="spacer-lg"></div>
+
+          <div class="hybrid-diagram" style="margin: 0.5rem auto 1.2rem;">
+            <img src="assets/autoweave-hex.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
+            <div class="hybrid-legend">
+              <span class="legend-pill">Async inputs</span>
+              <span class="legend-pill">Merge points</span>
+              <span class="legend-pill">Human checkpoints</span>
+              <span class="legend-pill">Clean outputs</span>
+            </div>
+          </div>
+
+          <p class="aw-card__desc">
+            Tip: once you see the “clean” baseline, it’s easier to understand where human checkpoints are required:
+            renames, duplicates, ambiguous categories, and edge cases.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- INTERACTIVE WORKBENCH -->
+    <section id="workbench" class="tab-section">
+      <div class="container">
+        <h1>Interactive workbench</h1>
+        <div class="divider"></div>
+
+        <p>
+          Upload a CSV to preview structure and generate quick summaries.
+          Processing runs locally in your browser (no database required at this stage).
         </p>
 
         <div class="spacer-lg"></div>
@@ -227,72 +284,73 @@
         <div class="spacer-xl"></div>
 
         <p>
-          Example workflows include POS exports with bank statements, operational logs, CRM extracts, supplier feeds, 
+          Example workflows include POS exports with bank statements, operational logs, CRM extracts, supplier feeds,
           and any data process where edge cases require contextual resolution with documented rationale.
         </p>
       </div>
     </section>
 
-  <!-- Footer injection -->
-  <div id="site-footer"></div>
+    <!-- Footer injection -->
+    <div id="site-footer"></div>
 
-  <script>
-    fetch("footer.html")
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById("site-footer").innerHTML = html;
-        const yearEl = document.getElementById("year");
-        if (yearEl) yearEl.textContent = new Date().getFullYear();
+    <script>
+      fetch("footer.html")
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById("site-footer").innerHTML = html;
+          const yearEl = document.getElementById("year");
+          if (yearEl) yearEl.textContent = new Date().getFullYear();
+        });
+    </script>
+
+    <!-- Mobile nav script -->
+    <script>
+      const toggle = document.querySelector(".nav-toggle");
+      const mobileNav = document.getElementById("mobile-nav");
+      const closeBtn = document.querySelector(".mobile-nav__close");
+
+      function openNav(){
+        mobileNav.classList.add("is-open");
+        mobileNav.setAttribute("aria-hidden", "false");
+        toggle?.setAttribute("aria-expanded", "true");
+        document.body.classList.add("nav-open");
+      }
+
+      function closeNav(){
+        mobileNav.classList.remove("is-open");
+        mobileNav.setAttribute("aria-hidden", "true");
+        toggle?.setAttribute("aria-expanded", "false");
+        document.body.classList.remove("nav-open");
+      }
+
+      toggle?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openNav();
       });
-  </script>
 
-  <!-- Mobile nav script -->
-  <script>
-    const toggle = document.querySelector(".nav-toggle");
-    const mobileNav = document.getElementById("mobile-nav");
-    const closeBtn = document.querySelector(".mobile-nav__close");
+      closeBtn?.addEventListener("click", closeNav);
 
-    function openNav(){
-      mobileNav.classList.add("is-open");
-      mobileNav.setAttribute("aria-hidden", "false");
-      toggle?.setAttribute("aria-expanded", "true");
-      document.body.classList.add("nav-open");
-    }
+      mobileNav?.querySelectorAll("a").forEach(a => a.addEventListener("click", closeNav));
 
-    function closeNav(){
-      mobileNav.classList.remove("is-open");
-      mobileNav.setAttribute("aria-hidden", "true");
-      toggle?.setAttribute("aria-expanded", "false");
-      document.body.classList.remove("nav-open");
-    }
+      document.addEventListener("keydown", (e) => {
+        if(e.key === "Escape") closeNav();
+      });
 
-    toggle?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openNav();
-    });
+      document.addEventListener("click", (e) => {
+        if (!mobileNav.classList.contains("is-open")) return;
 
-    closeBtn?.addEventListener("click", closeNav);
+        const target = e.target;
+        if (!(target instanceof Node)) return;
 
-    mobileNav?.querySelectorAll("a").forEach(a => a.addEventListener("click", closeNav));
+        const clickedInsidePanel = mobileNav.contains(target);
+        const clickedToggle = toggle && toggle.contains(target);
 
-    document.addEventListener("keydown", (e) => {
-      if(e.key === "Escape") closeNav();
-    });
+        if (!clickedInsidePanel && !clickedToggle) closeNav();
+      });
+    </script>
 
-    document.addEventListener("click", (e) => {
-      if (!mobileNav.classList.contains("is-open")) return;
-
-      const target = e.target;
-      if (!(target instanceof Node)) return;
-
-      const clickedInsidePanel = mobileNav.contains(target);
-      const clickedToggle = toggle && toggle.contains(target);
-
-      if (!clickedInsidePanel && !clickedToggle) closeNav();
-    });
-  </script>
-
-  <!-- Keep your existing AutoWeave CSV demo logic -->
-  <script src="./script.js"></script>
+    <!-- Keep your existing AutoWeave CSV demo logic -->
+    <script src="./script.js"></script>
+  </main>
 </body>
 </html>
