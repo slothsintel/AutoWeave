@@ -109,9 +109,18 @@
         <div class="aw-card">
           <h4 class="aw-card__title">Example dataset</h4>
           <p class="aw-card__desc">
-            Use a known-good sample (AutoTrac-style CSV) to see a clean pipeline outcome before trying your own exports.
+            Take a glimpse of <a href="assets/technology/autotrac_export_month_2026-02_projects.csv" download>project sample</a>, 
+            <a href="assets/technology/autotrac_export_month_2026-02_incomes.csv" download>income sample</a>, 
+            and <a href="assets/technology/autotrac_export_month_2026-02_time_entries.csv" download>time entries sample</a> 
+            to see a clean pipeline outcome before trying your own exports.
           </p>
-
+          <div class="contact-form" style="max-width: 100%;">
+            <div class="form-row">
+              <label for="fileInput">Upload a CSV</label>
+              <input id="fileInput" type="file" accept=".csv,text/csv" />
+            </div>
+            <button type="button" id="clearBtn">Clear</button>
+          </div>
           <div class="contact-form" style="max-width: 100%;">
             <div class="form-row">
               <label>What you’ll see</label>
@@ -120,11 +129,6 @@
 - Row/column summary + basic structure metrics
 - Thread merge diagram + checkpoint concepts
               </textarea>
-            </div>
-
-            <!-- Optional hook (safe even if unused): you can wire this later in script.js -->
-            <button type="button" id="sampleBtn">Load sample (AutoTrac CSV)</button>
-          </div>
 
           <div class="spacer-lg"></div>
 
@@ -255,7 +259,7 @@
                 </p>
 
                 <div class="hybrid-diagram" style="margin: 1rem auto 1.2rem;">
-                  <img src="assets/autoweave-hex.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
+                  <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
                   <div class="hybrid-legend">
                     <span class="legend-pill">Async inputs</span>
                     <span class="legend-pill">Merge points</span>
