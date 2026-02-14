@@ -201,51 +201,37 @@
           <section class="aw-pane" aria-label="Build (inputs and pipeline)">
             <div class="aw-pane__header">
               <h3 class="aw-pane__title">Build</h3>
-              <p class="aw-pane__subtitle">Inputs, threads, merge rules</p>
+              <p class="aw-pane__subtitle">Inputs, trims and merges</p>
             </div>
 
             <div class="aw-pane__body">
               <div class="aw-card">
-                <h4 class="aw-card__title">Input</h4>
-                <p class="aw-card__desc">Upload a CSV to begin. Future integrations: AutoTrac export, JSON inputs, and external data connectors.</p>
-
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <label for="fileInput">Upload a CSV</label>
+                    <label for="fileInput">Upload a project CSV</label>
                     <input id="fileInput" type="file" accept=".csv,text/csv" />
                   </div>
-
                   <button type="button" id="clearBtn">Clear</button>
                 </div>
               </div>
 
               <div class="aw-card">
-                <h4 class="aw-card__title">Pipeline steps</h4>
-                <p class="aw-card__desc">Prototype pipeline flow — draggable transforms planned in the next iteration.</p>
-
-                <ul class="aw-steps">
-                  <li><span class="emphasis">Parse</span> → detect columns</li>
-                  <li><span class="emphasis">Clean</span> → trim, normalise</li>
-                  <li><span class="emphasis">Merge</span> → 2→1 and 3→1 checkpoints</li>
-                  <li><span class="emphasis">Export</span> → CSV / JSON recipe</li>
-                </ul>
-              </div>
-
-              <div class="aw-card">
-                <h4 class="aw-card__title">Human checkpoint</h4>
-                <p class="aw-card__desc">
-                  This is where correctness is evaluated in context. Future development includes structured review queues and rationale logging for auditability.
-                </p>
-
-                <div class="aw-checkpoint">
-                  <div class="aw-checkpoint__row">
-                    <span class="legend-pill">2 → 1 merge</span>
-                    <span class="legend-pill">3 → 1 merge</span>
-                    <span class="legend-pill">Create thread</span>
+                <div class="contact-form" style="max-width: 100%;">
+                  <div class="form-row">
+                    <label for="fileInput">Upload an income CSV</label>
+                    <input id="fileInput" type="file" accept=".csv,text/csv" />
                   </div>
-                  <p class="aw-checkpoint__note">
-                    (Currently a front-end prototype — backend services will support persistence and collaboration.)
-                  </p>
+                  <button type="button" id="clearBtn">Clear</button>
+                </div>
+              </div>
+              
+              <div class="aw-card">
+                <div class="contact-form" style="max-width: 100%;">
+                  <div class="form-row">
+                    <label for="fileInput">Upload a time entries CSV</label>
+                    <input id="fileInput" type="file" accept=".csv,text/csv" />
+                  </div>
+                  <button type="button" id="clearBtn">Clear</button>
                 </div>
               </div>
             </div>
@@ -255,17 +241,16 @@
           <section class="aw-pane" aria-label="See (preview and visualisation)">
             <div class="aw-pane__header">
               <h3 class="aw-pane__title">See</h3>
-              <p class="aw-pane__subtitle">Preview, stats, and thread diagram</p>
+              <p class="aw-pane__subtitle">Preview, stats, and visualisations</p>
             </div>
 
             <div class="aw-pane__body">
               <div class="aw-card">
                 <h4 class="aw-card__title">Preview</h4>
-                <p class="aw-card__desc">First ~30 lines of your CSV.</p>
+                <p class="aw-card__desc">First ~30 lines of your merged CSV.</p>
 
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <label>Preview</label>
                     <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
                   </div>
                 </div>
@@ -276,28 +261,18 @@
                 <p class="aw-card__desc">
                     Row and column summary with indicative structure metrics.
                 </p>
-
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <label>Quick stats</label>
                     <textarea id="stats" readonly placeholder="Rows/columns + basic stats will appear here…"></textarea>
                   </div>
                 </div>
               </div>
 
               <div class="aw-card">
-                <h4 class="aw-card__title">Threads</h4>
-                <p class="aw-card__desc">
-                    Asynchronous data threads merge into a single structured output, with human checkpoints at critical merge points.
-                </p>
-
+                <h4 class="aw-card__title">Visualisations</h4>
                 <div class="hybrid-diagram" style="margin: 1rem auto 1.2rem;">
                   <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
                   <div class="hybrid-legend">
-                    <span class="legend-pill">Async inputs</span>
-                    <span class="legend-pill">Merge points</span>
-                    <span class="legend-pill">Human checkpoints</span>
-                    <span class="legend-pill">Clean outputs</span>
                   </div>
                 </div>
               </div>
