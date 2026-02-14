@@ -104,49 +104,76 @@
           This page runs locally in your browser (no database required at this stage).
         </p>
 
-        <div class="spacer-lg"></div>
+        <h2>Workflow</h2>
+        <div class="aw-card">  
+          <div class="contact-form" style="max-width: 100%;">
+            <div class="spacer-lg"></div>
+              <figure class="figure-half zoomable">
+                <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
+                <div class="hybrid-legend">
+                  <span class="legend-pill">Async inputs</span>
+                  <span class="legend-pill">Merge points</span>
+                  <span class="legend-pill">Checkpoints</span>
+                  <span class="legend-pill">Clean outputs</span>
+                </div>
+              </div>
+              <p class="aw-card__desc">
+                Tip: once you see the “clean” baseline, it’s easier to understand where human checkpoints are required:
+                renames, duplicates, ambiguous categories, and edge cases.
+              </p>
+            </div> 
 
-        <div class="aw-card">
-          <h4 class="aw-card__title">Example dataset</h4>
-          <p class="aw-card__desc">
-            Take a glimpse of <a href="assets/technology/autotrac_export_month_2026-02_projects.csv" download>project sample</a>, 
-            <a href="assets/technology/autotrac_export_month_2026-02_incomes.csv" download>income sample</a>, 
-            and <a href="assets/technology/autotrac_export_month_2026-02_time_entries.csv" download>time entries sample</a> 
-            to see a clean pipeline outcome before trying your own exports.
-          </p>
-          <div class="contact-form" style="max-width: 100%;">
-            <div class="form-row">
-              <label for="fileInput">Upload a CSV</label>
-              <input id="fileInput" type="file" accept=".csv,text/csv" />
-            </div>
-            <button type="button" id="clearBtn">Clear</button>
+      <div class="spacer-lg"></div>
+
+      <h2>Inputs</h2>
+      <div class="aw-card">
+        <p class="aw-card__desc">
+          Take a glimpse of <a href="assets/technology/autotrac_export_month_2026-02_projects.csv" download>project sample</a>, 
+          <a href="assets/technology/autotrac_export_month_2026-02_incomes.csv" download>income sample</a>, 
+          and <a href="assets/technology/autotrac_export_month_2026-02_time_entries.csv" download>time entries sample</a> 
+          to see a clean pipeline outcome before trying your own exports.
+        </p>
+        <div class="contact-form" style="max-width: 100%;">
+          <div class="form-row">
+            <label for="fileInput">Upload a CSV</label>
+            <input id="fileInput" type="file" accept=".csv,text/csv" />
           </div>
-          <div class="contact-form" style="max-width: 100%;">
-            <div class="form-row">
-              <label>What you’ll see</label>
-              <textarea readonly>
+          <button type="button" id="clearBtn">Clear</button>
+        </div>
+        <div class="contact-form" style="max-width: 100%;">
+          <div class="form-row">
+            <label>What you’ll see</label>
+            <textarea readonly>
 - A clean CSV preview (first ~30 lines)
 - Row/column summary + basic structure metrics
 - Thread merge diagram + checkpoint concepts
-              </textarea>
-
-          <div class="spacer-lg"></div>
-
-          <figure class="figure-half zoomable">
-            <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
-            <div class="hybrid-legend">
-              <span class="legend-pill">Async inputs</span>
-              <span class="legend-pill">Merge points</span>
-              <span class="legend-pill">Human checkpoints</span>
-              <span class="legend-pill">Clean outputs</span>
-            </div>
+            </textarea>
+            <div class="contact-form" style="max-width: 100%;">
+              <div class="form-row">
+                <label>Preview</label>
+                <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
+              </div>
+            </div> 
           </div>
-
-          <p class="aw-card__desc">
-            Tip: once you see the “clean” baseline, it’s easier to understand where human checkpoints are required:
-            renames, duplicates, ambiguous categories, and edge cases.
-          </p>
         </div>
+      </div> 
+
+      <div class="spacer-lg"></div>
+      <h2>Merges</h2>
+      <div class="aw-card">
+          
+      </div>
+
+      <div class="spacer-lg"></div>
+      <h2>Checkpoints</h2>
+      <div class="aw-card">
+          
+      </div>
+
+      <div class="spacer-lg"></div>
+      <h2>Visualisations</h2>
+      <div class="aw-card">
+          
       </div>
     </section>
 
