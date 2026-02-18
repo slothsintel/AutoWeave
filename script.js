@@ -587,15 +587,15 @@
 
   if (chartsArea) {
     if (!chartsArea.querySelector("#owChartIncome")) {
-      incomeBlock = makeCanvasBlock("Income by project (stacked, by date)");
+      incomeBlock = makeCanvasBlock("Total income by project");
       incomeBlock.wrap.id = "owChartIncome";
       chartsArea.appendChild(incomeBlock.wrap);
 
-      durationBlock = makeCanvasBlock("Duration by project (stacked, by date)");
+      durationBlock = makeCanvasBlock("Total time by project");
       durationBlock.wrap.id = "owChartDuration";
       chartsArea.appendChild(durationBlock.wrap);
 
-      ratioBlock = makeCanvasBlock("Income / duration by project (stacked, by date)");
+      ratioBlock = makeCanvasBlock("Hourly rate by project");
       ratioBlock.wrap.id = "owChartRatio";
       chartsArea.appendChild(ratioBlock.wrap);
     } else {
@@ -726,9 +726,9 @@
       statsPanel.appendChild(
         makeSummaryGrid([
           { k: "Row count", v: formatInt(rowCount) },
-          { k: "Total duration (hours)", v: formatNumber(totalDuration, 2) },
+          { k: "Total time (hours)", v: formatNumber(totalDuration, 2) },
           { k: `Total income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
-          { k: "Income / duration", v: formatNumber(overallRatio, 2) },
+          { k: "Hourly rate", v: formatNumber(overallRatio, 2) },
         ])
       );
 
@@ -743,13 +743,13 @@
         makeMiniTable(
           `Income by project (${incomeLabel})`,
           incomeByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.income, 2) })),
-          { col1: "Project", col2: "Income" }
+          { col1: "Project", col2: "Amount" }
         )
       );
 
       grid.appendChild(
         makeMiniTable(
-          "Duration by project (hours)",
+          "Time by project (hours)",
           durationByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.duration, 2) })),
           { col1: "Project", col2: "Hours" }
         )
@@ -757,9 +757,9 @@
 
       grid.appendChild(
         makeMiniTable(
-          `Income / duration by project (${incomeLabel}/hour)`,
+          `Hourly rate by project (${incomeLabel}/hour)`,
           ratioByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.ratio, 2) })),
-          { col1: "Project", col2: "Ratio" }
+          { col1: "Project", col2: "Rate" }
         )
       );
 
