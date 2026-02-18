@@ -726,9 +726,9 @@
       statsPanel.appendChild(
         makeSummaryGrid([
           { k: "Row count", v: formatInt(rowCount) },
-          { k: "Total time (hours)", v: formatNumber(totalDuration, 2) },
-          { k: `Total income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
-          { k: "Hourly rate", v: formatNumber(overallRatio, 2) },
+          { k: "Time (hours)", v: formatNumber(totalDuration, 2) },
+          { k: `Income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
+          { k: "Avg. rate", v: formatNumber(overallRatio, 2) },
         ])
       );
 
@@ -741,15 +741,15 @@
 
       grid.appendChild(
         makeMiniTable(
-          `Income by project (${incomeLabel})`,
+          `Income`,
           incomeByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.income, 2) })),
-          { col1: "Project", col2: "Amount" }
+          { col1: "Project", col2: `(${incomeLabel})` }
         )
       );
 
       grid.appendChild(
         makeMiniTable(
-          "Time by project (hours)",
+          "Time",
           durationByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.duration, 2) })),
           { col1: "Project", col2: "Hours" }
         )
@@ -757,9 +757,9 @@
 
       grid.appendChild(
         makeMiniTable(
-          `Hourly rate by project (${incomeLabel}/hour)`,
+          `Hourly rate`,
           ratioByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.ratio, 2) })),
-          { col1: "Project", col2: "Rate" }
+          { col1: "Project", col2: `(${incomeLabel}/h)` }
         )
       );
 
