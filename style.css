@@ -1033,7 +1033,7 @@ body.nav-open{ overflow: hidden; }
   align-items: stretch;
 
   /* Fixed-height workbench (app-like) */
-  height: clamp(560px, 74vh, 860px);
+  height: clamp(560px, 120vh, 860px);
 }
 
 /* Pane uses the same “card” language */
