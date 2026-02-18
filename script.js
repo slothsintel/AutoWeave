@@ -1,6 +1,6 @@
 // script.js (full)
 // - Guided example: local preview of a single CSV
-// - Workbench: trim + full join via AutoWeave backend (entries + incomes required, projects optional)
+// - Workbench: trim + aggregate + full join via AutoWeave backend
 
 (() => {
   // -----------------------------
@@ -31,15 +31,14 @@
 
 (() => {
   // ---------------------------------
-  // Workbench: backend trim + full join
+  // Workbench: backend merge
   // ---------------------------------
 
-  // Render backend base URL
   const API_BASE = "https://autoweave-backend.onrender.com";
 
-  const projectsFile = document.getElementById("projectsFile"); // optional
-  const incomesFile = document.getElementById("incomesFile");   // required
-  const entriesFile = document.getElementById("entriesFile");   // required
+  const projectsFile = document.getElementById("projectsFile");
+  const incomesFile = document.getElementById("incomesFile");
+  const entriesFile = document.getElementById("entriesFile");
 
   const runBtn = document.getElementById("runMergeBtn");
   const resetBtn = document.getElementById("resetAllBtn");
@@ -49,7 +48,6 @@
   const statsMerged = document.getElementById("statsMerged");
   const downloadBtn = document.getElementById("downloadBtn");
 
-  // If this page doesn't have workbench elements, do nothing.
   if (
     !incomesFile || !entriesFile ||
     !runBtn || !resetBtn ||
@@ -75,26 +73,16 @@
 
   resetBtn.addEventListener("click", resetAll);
 
-  function buildCombinedPreviewForCleanedOnly(previews) {
-    const p = previews || {};
-    const combined =
-      `--- time_entries ---\n${p.time_entries_csv ?? ""}\n\n` +
-      `--- incomes ---\n${p.incomes_csv ?? ""}\n\n` +
-      `--- projects ---\n${p.projects_csv ?? ""}\n`;
-    return combined;
-  }
-
   async function runMerge() {
     const entries = entriesFile.files?.[0];
     const incomes = incomesFile.files?.[0];
-    const projects = projectsFile?.files?.[0]; // optional
+    const projects = projectsFile?.files?.[0];
 
     if (!entries || !incomes) {
-      setStatus("Please select at least 2 files: Time entries CSV + Income CSV. (Projects CSV is optional.)");
+      setStatus("Please select at least 2 files: Time entries CSV + Income CSV. (Projects CSV optional.)");
       return;
     }
 
-    // Reset outputs
     downloadBtn.style.display = "none";
     downloadBtn.removeAttribute("href");
     previewMerged.value = "";
@@ -108,7 +96,7 @@
     if (projects) form.append("projects_csv", projects);
 
     try {
-      setStatus("Running trim + full join on backend…");
+      setStatus("Processing…");
 
       const res = await fetch(`${API_BASE}/api/v1/merge/autotrac`, {
         method: "POST",
@@ -117,41 +105,34 @@
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        setStatus(`Backend error (${res.status}). ${text}`);
+        setStatus(`Backend error (${res.status}): ${text}`);
         return;
       }
 
       const data = await res.json();
 
-      // Stats
+      // Always show stats
       statsMerged.value = JSON.stringify(data.stats ?? {}, null, 2);
 
-      if (data.mode === "merged") {
-        // Preview
+      // ✅ SUCCESS = backend returned a CSV
+      if (typeof data.download_csv === "string" && data.download_csv.length > 0) {
+
         previewMerged.value = (data.preview_csv ?? "").slice(0, 8000);
 
-        // Download button
-        const csvText = data.download_csv ?? "";
-        const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+        const blob = new Blob([data.download_csv], {
+          type: "text/csv;charset=utf-8"
+        });
+
         const url = URL.createObjectURL(blob);
 
         downloadBtn.href = url;
         downloadBtn.style.display = "inline-flex";
 
-        const joinKeyInfo =
-          data.stats?.after_trim
-            ? "Trim OK. Full join completed."
-            : "Merge completed.";
-
-        setStatus(joinKeyInfo);
+        setStatus(`Done ✔ (${data.mode ?? "ok"})`);
       } else {
-        // cleaned_only mode (if backend ever returns it)
-        const msg = data.message ?? "No merge performed.";
-        setStatus(msg);
-
-        const combined = buildCombinedPreviewForCleanedOnly(data.previews);
-        previewMerged.value = combined.slice(0, 8000);
+        setStatus(`No output returned. mode=${data.mode ?? "unknown"}`);
       }
+
     } catch (err) {
       setStatus(`Request failed: ${err?.message ?? String(err)}`);
     }
