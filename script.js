@@ -1,42 +1,45 @@
-// script.js (updated)
+// script.js (full)
+// - Guided example: local preview of a single CSV
+// - Workbench: trim + full join via AutoWeave backend (entries + incomes required, projects optional)
 
-// -----------------------------
-// Guided example: local preview
-// -----------------------------
 (() => {
+  // -----------------------------
+  // Guided example: local preview
+  // -----------------------------
   const fileInput = document.getElementById("guidedFileInput");
   const preview = document.getElementById("guidedPreview");
   const clearBtn = document.getElementById("guidedClearBtn");
 
-  if (!fileInput || !preview || !clearBtn) return;
+  if (fileInput && preview && clearBtn) {
+    function reset() {
+      fileInput.value = "";
+      preview.value = "";
+    }
 
-  function reset() {
-    fileInput.value = "";
-    preview.value = "";
+    clearBtn.addEventListener("click", reset);
+
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const text = await file.text();
+      const lines = text.split(/\r?\n/);
+      preview.value = lines.slice(0, 30).join("\n").slice(0, 4000);
+    });
   }
-
-  clearBtn.addEventListener("click", reset);
-
-  fileInput.addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const text = await file.text();
-    const lines = text.split(/\r?\n/);
-    preview.value = lines.slice(0, 30).join("\n").slice(0, 4000);
-  });
 })();
 
-// ---------------------------------
-// Workbench: 3-file backend merge
-// ---------------------------------
 (() => {
-  // Change this if you want to point at a different environment
+  // ---------------------------------
+  // Workbench: backend trim + full join
+  // ---------------------------------
+
+  // Render backend base URL
   const API_BASE = "https://autoweave-backend.onrender.com";
 
-  const projectsFile = document.getElementById("projectsFile");
-  const incomesFile = document.getElementById("incomesFile");
-  const entriesFile = document.getElementById("entriesFile");
+  const projectsFile = document.getElementById("projectsFile"); // optional
+  const incomesFile = document.getElementById("incomesFile");   // required
+  const entriesFile = document.getElementById("entriesFile");   // required
 
   const runBtn = document.getElementById("runMergeBtn");
   const resetBtn = document.getElementById("resetAllBtn");
@@ -46,8 +49,9 @@
   const statsMerged = document.getElementById("statsMerged");
   const downloadBtn = document.getElementById("downloadBtn");
 
+  // If this page doesn't have workbench elements, do nothing.
   if (
-    !projectsFile || !incomesFile || !entriesFile ||
+    !incomesFile || !entriesFile ||
     !runBtn || !resetBtn ||
     !statusBox || !previewMerged || !statsMerged || !downloadBtn
   ) return;
@@ -57,7 +61,7 @@
   }
 
   function resetAll() {
-    projectsFile.value = "";
+    if (projectsFile) projectsFile.value = "";
     incomesFile.value = "";
     entriesFile.value = "";
 
@@ -71,30 +75,40 @@
 
   resetBtn.addEventListener("click", resetAll);
 
-  async function runMerge() {
-    const f1 = projectsFile.files?.[0];
-    const f2 = incomesFile.files?.[0];
-    const f3 = entriesFile.files?.[0];
+  function buildCombinedPreviewForCleanedOnly(previews) {
+    const p = previews || {};
+    const combined =
+      `--- time_entries ---\n${p.time_entries_csv ?? ""}\n\n` +
+      `--- incomes ---\n${p.incomes_csv ?? ""}\n\n` +
+      `--- projects ---\n${p.projects_csv ?? ""}\n`;
+    return combined;
+  }
 
-    if (!f1 || !f2 || !f3) {
-      setStatus("Please select all 3 files: Project CSV, Income CSV, Time entries CSV.");
+  async function runMerge() {
+    const entries = entriesFile.files?.[0];
+    const incomes = incomesFile.files?.[0];
+    const projects = projectsFile?.files?.[0]; // optional
+
+    if (!entries || !incomes) {
+      setStatus("Please select at least 2 files: Time entries CSV + Income CSV. (Projects CSV is optional.)");
       return;
     }
 
+    // Reset outputs
     downloadBtn.style.display = "none";
     downloadBtn.removeAttribute("href");
-
     previewMerged.value = "";
     statsMerged.value = "";
+
     setStatus("Uploading files…");
 
     const form = new FormData();
-    form.append("projects_csv", f1);
-    form.append("incomes_csv", f2);
-    form.append("time_entries_csv", f3);
+    form.append("time_entries_csv", entries);
+    form.append("incomes_csv", incomes);
+    if (projects) form.append("projects_csv", projects);
 
     try {
-      setStatus("Running merge on backend…");
+      setStatus("Running trim + full join on backend…");
 
       const res = await fetch(`${API_BASE}/api/v1/merge/autotrac`, {
         method: "POST",
@@ -113,9 +127,10 @@
       statsMerged.value = JSON.stringify(data.stats ?? {}, null, 2);
 
       if (data.mode === "merged") {
+        // Preview
         previewMerged.value = (data.preview_csv ?? "").slice(0, 8000);
 
-        // Enable download (CSV text -> Blob -> link)
+        // Download button
         const csvText = data.download_csv ?? "";
         const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -123,20 +138,18 @@
         downloadBtn.href = url;
         downloadBtn.style.display = "inline-flex";
 
-        setStatus(
-          `Merged OK. join_key_used=${data.stats?.join_key_used ?? "unknown"}`
-        );
+        const joinKeyInfo =
+          data.stats?.after_trim
+            ? "Trim OK. Full join completed."
+            : "Merge completed.";
+
+        setStatus(joinKeyInfo);
       } else {
-        // cleaned_only mode
+        // cleaned_only mode (if backend ever returns it)
         const msg = data.message ?? "No merge performed.";
         setStatus(msg);
 
-        const previews = data.previews ?? {};
-        const combined =
-          `--- projects ---\n${previews.projects_csv ?? ""}\n\n` +
-          `--- incomes ---\n${previews.incomes_csv ?? ""}\n\n` +
-          `--- time_entries ---\n${previews.time_entries_csv ?? ""}\n`;
-
+        const combined = buildCombinedPreviewForCleanedOnly(data.previews);
         previewMerged.value = combined.slice(0, 8000);
       }
     } catch (err) {

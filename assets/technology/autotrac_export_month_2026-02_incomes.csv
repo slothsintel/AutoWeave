@@ -13,4 +13,6 @@ id,project_id,project_name,date,amount,currency,amount_gbp
 12,21,ProjectC,2026-02-17,3000,GBP,3000
 13,20,ProjectA,2026-02-16,2000,GBP,2000
 14,17,ProjectB,2026-02-15,2500,HKD,250
+,,2026-02-16,2000,GBP,2000
+14,17,,,,,
 15,21,ProjectC,2026-02-14,3500,HKD,350
