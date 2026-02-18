@@ -1028,7 +1028,7 @@ body.nav-open{ overflow: hidden; }
 
 .aw-workbench{
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 3fr 5fr;
   gap: 1rem;
   align-items: stretch;
 

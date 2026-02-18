@@ -1,10 +1,9 @@
 // script.js (full)
 // - Guided example: local preview of a single CSV
 // - Workbench: calls AutoWeave backend, renders preview/stats
-// - Enhancements (no tech.html changes required):
-//   Quick stats: row count, totals, ratios, per-project breakdowns
-//   Visualisations: 3 stacked bar charts by date (income, duration, income/duration)
-//   Charts use user-provided color palette for project stacks
+// - Quick stats: row count, totals, ratios, per-project breakdowns
+// - Visualisations: 3 stacked bar charts by date (income, duration, income/duration)
+//   with color legend + floating tooltip (AutoTrac style)
 
 (() => {
   // -----------------------------
@@ -70,10 +69,7 @@
   }
 
   function parseCsv(text) {
-    const lines = text
-      .split(/\r?\n/)
-      .filter((l) => l.trim().length > 0);
-
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
     if (lines.length === 0) return { header: [], rows: [] };
 
     const header = parseCsvLine(lines[0]).map((h) => h.trim());
@@ -113,17 +109,14 @@
   }
 
   function formatInt(n) {
-    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(
-      Number.isFinite(n) ? n : 0
-    );
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number.isFinite(n) ? n : 0);
   }
 
   function sortIsoDates(dates) {
     return [...dates].sort((a, b) => String(a).localeCompare(String(b)));
   }
 
-  // Income metric selector:
-  // prefer amount_gbp if there is any non-empty amount_gbp in dataset; otherwise use amount
+  // Income metric selector: prefer amount_gbp if any non-empty amount_gbp exists
   function chooseIncomeAccessor(rows) {
     const anyGbp = rows.some((r) => (r.amount_gbp ?? "").toString().trim() !== "");
     return {
@@ -133,7 +126,7 @@
   }
 
   // ---------------------------------
-  // Helpers: DOM injection (no HTML changes)
+  // Helpers: DOM injection (no tech.html changes)
   // ---------------------------------
 
   function ensureStatsPanel(statsTextarea) {
@@ -262,9 +255,7 @@
 
   function findVisualisationsCard() {
     const headings = Array.from(document.querySelectorAll(".aw-card .aw-card__title"));
-    const h = headings.find(
-      (x) => (x.textContent || "").trim().toLowerCase() === "visualisations"
-    );
+    const h = headings.find((x) => (x.textContent || "").trim().toLowerCase() === "visualisations");
     if (!h) return null;
     return h.closest(".aw-card");
   }
@@ -282,11 +273,9 @@
     area.style.marginTop = "0.75rem";
 
     const diagram = visCard.querySelector(".hybrid-diagram");
-    if (diagram && diagram.parentElement) {
-      diagram.parentElement.appendChild(area);
-    } else {
-      visCard.appendChild(area);
-    }
+    if (diagram && diagram.parentElement) diagram.parentElement.appendChild(area);
+    else visCard.appendChild(area);
+
     return area;
   }
 
@@ -296,24 +285,56 @@
     wrap.style.background = "rgba(255,255,255,0.92)";
     wrap.style.borderRadius = "14px";
     wrap.style.padding = "0.75rem";
+    wrap.style.position = "relative";
 
     const h = document.createElement("div");
     h.textContent = title;
     h.style.fontWeight = "700";
-    h.style.marginBottom = "0.5rem";
+    h.style.marginBottom = "0.35rem";
     wrap.appendChild(h);
+
+    // Legend container (chips)
+    const legend = document.createElement("div");
+    legend.style.display = "flex";
+    legend.style.flexWrap = "wrap";
+    legend.style.gap = "0.5rem 0.8rem";
+    legend.style.alignItems = "center";
+    legend.style.marginBottom = "0.55rem";
+    legend.style.opacity = "0.85";
+    wrap.appendChild(legend);
 
     const canvas = document.createElement("canvas");
     canvas.style.width = "100%";
     canvas.style.height = "220px";
     canvas.height = 220;
+    canvas.style.display = "block";
+    canvas.style.borderRadius = "10px";
     wrap.appendChild(canvas);
 
-    return { wrap, canvas };
+    // Tooltip (floating)
+    const tip = document.createElement("div");
+    tip.style.position = "absolute";
+    tip.style.pointerEvents = "none";
+    tip.style.display = "none";
+    tip.style.zIndex = "5";
+    tip.style.minWidth = "180px";
+    tip.style.maxWidth = "260px";
+    tip.style.padding = "10px 12px";
+    tip.style.borderRadius = "12px";
+    tip.style.border = "1px solid rgba(15,31,23,0.18)";
+    tip.style.background = "rgba(10,18,14,0.92)";
+    tip.style.color = "rgba(255,255,255,0.92)";
+    tip.style.boxShadow = "0 10px 30px rgba(0,0,0,0.22)";
+    tip.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    tip.style.fontSize = "12px";
+    tip.style.lineHeight = "1.25";
+    wrap.appendChild(tip);
+
+    return { wrap, canvas, legend, tip };
   }
 
   // ---------------------------------
-  // Charts: stacked bars with project colors
+  // Colors (your palette)
   // ---------------------------------
 
   const PROJECT_COLORS = [
@@ -334,15 +355,62 @@
   function colorForProject(name) {
     const s = String(name || "");
     let h = 0;
-    for (let i = 0; i < s.length; i++) {
-      h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    }
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
     return PROJECT_COLORS[h % PROJECT_COLORS.length];
   }
 
-  function drawStackedBars(canvas, dates, seriesOrder, valuesByDateProject, opts) {
+  // ---------------------------------
+  // Charts: stacked bars with legend + tooltip
+  // ---------------------------------
+
+  function setLegendChips(legendEl, projects, moreCount) {
+    if (!legendEl) return;
+    legendEl.innerHTML = "";
+
+    projects.forEach((p) => {
+      const chip = document.createElement("div");
+      chip.style.display = "inline-flex";
+      chip.style.alignItems = "center";
+      chip.style.gap = "0.4rem";
+      chip.style.fontSize = "12px";
+      chip.style.color = "rgba(15,31,23,0.72)";
+
+      const dot = document.createElement("span");
+      dot.style.width = "10px";
+      dot.style.height = "10px";
+      dot.style.borderRadius = "999px";
+      dot.style.display = "inline-block";
+      dot.style.background = colorForProject(p);
+      dot.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.8)";
+
+      const label = document.createElement("span");
+      label.textContent = p;
+
+      chip.appendChild(dot);
+      chip.appendChild(label);
+      legendEl.appendChild(chip);
+    });
+
+    if (moreCount > 0) {
+      const more = document.createElement("span");
+      more.textContent = `+${moreCount} more`;
+      more.style.fontSize = "12px";
+      more.style.opacity = "0.6";
+      legendEl.appendChild(more);
+    }
+  }
+
+  function clamp(n, a, b) {
+    return Math.max(a, Math.min(b, n));
+  }
+
+  function drawStackedBars(canvas, legendEl, tipEl, dates, seriesOrder, valuesByDateProject, opts) {
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    // Draw + hit regions for hover
+    const hit = []; // {x,y,w,h,date,project,value}
 
     const cssW = canvas.clientWidth || 800;
     const cssH = canvas.clientHeight || 220;
@@ -350,21 +418,22 @@
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
     ctx.clearRect(0, 0, cssW, cssH);
 
-    const padding = { l: 10, r: 10, t: 10, b: 34 };
+    const padding = { l: 10, r: 10, t: 8, b: 34 };
     const w = cssW - padding.l - padding.r;
     const h = cssH - padding.t - padding.b;
 
+    // legend chips
+    setLegendChips(legendEl, seriesOrder, opts?.legendMore || 0);
+
     if (!dates.length || !seriesOrder.length) {
-      ctx.font = "12px Space Grotesk, system-ui, sans-serif";
+      ctx.font = "12px system-ui, sans-serif";
       ctx.fillStyle = "rgba(15,31,23,0.55)";
       ctx.fillText("No chart data available.", padding.l, padding.t + 16);
       return;
     }
 
-    // total per date (stack height)
     const totals = dates.map((d) => {
       const perProj = valuesByDateProject.get(d) || new Map();
       let sum = 0;
@@ -373,7 +442,6 @@
     });
 
     const maxTotal = Math.max(...totals, 0.000001);
-
     const gap = 6;
     const barW = Math.max(10, (w - gap * (dates.length - 1)) / dates.length);
 
@@ -385,18 +453,10 @@
     ctx.lineTo(padding.l + w, padding.t + h);
     ctx.stroke();
 
-    // small legend text
-    if (opts?.legend && opts.legend.length) {
-      ctx.textAlign = "left";
-      ctx.font = "11px Space Grotesk, system-ui, sans-serif";
-      ctx.fillStyle = "rgba(15,31,23,0.60)";
-      const legendText = `Stacked by: ${opts.legend.join(", ")}${
-        opts.legendMore ? ` +${opts.legendMore} more` : ""
-      }`;
-      ctx.fillText(legendText, padding.l, 12);
-    }
+    // x labels: show every Nth to avoid overlap
+    const maxLabels = 10;
+    const step = Math.max(1, Math.ceil(dates.length / maxLabels));
 
-    // bars
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       const perProj = valuesByDateProject.get(date) || new Map();
@@ -414,16 +474,85 @@
 
         ctx.fillStyle = colorForProject(p);
         ctx.fillRect(x, yCursor, barW, segH);
+
+        hit.push({ x, y: yCursor, w: barW, h: segH, date, project: p, value: v });
       }
 
-      // x label (date)
-      const label = String(date || "");
-      const short = label.length > 10 ? label.slice(5) : label; // show MM-DD if YYYY-MM-DD
-      ctx.font = "11px Space Grotesk, system-ui, sans-serif";
-      ctx.fillStyle = "rgba(15,31,23,0.60)";
-      ctx.textAlign = "center";
-      ctx.fillText(short, x + barW / 2, padding.t + h + 18);
+      if (i % step === 0 || i === dates.length - 1) {
+        const label = String(date || "");
+        const short = label.length >= 10 ? label.slice(5) : label; // MM-DD if YYYY-MM-DD
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.fillStyle = "rgba(15,31,23,0.60)";
+        ctx.textAlign = "center";
+        ctx.fillText(short, x + barW / 2, padding.t + h + 18);
+      }
     }
+
+    // Hover tooltip (one handler per canvas)
+    if (!canvas.__owHoverBound) {
+      canvas.__owHoverBound = true;
+
+      canvas.addEventListener("mousemove", (ev) => {
+        if (!tipEl) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const mx = ev.clientX - rect.left;
+        const my = ev.clientY - rect.top;
+
+        // find topmost hit segment under cursor
+        const seg = hit.find((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+        if (!seg) {
+          tipEl.style.display = "none";
+          return;
+        }
+
+        // Build tooltip: date + all project values for that date (for visible series)
+        const perProj = valuesByDateProject.get(seg.date) || new Map();
+
+        const lines = seriesOrder
+          .map((p) => ({ p, v: perProj.get(p) || 0 }))
+          .filter((x) => x.v > 0)
+          .sort((a, b) => b.v - a.v);
+
+        const title = `<div style="font-weight:800;font-size:13px;margin-bottom:6px;">${seg.date}</div>`;
+        const body = lines
+          .map(
+            (x) => `
+              <div style="display:flex;justify-content:space-between;gap:12px;margin:2px 0;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                  <span style="width:10px;height:10px;border-radius:999px;background:${colorForProject(x.p)};display:inline-block;"></span>
+                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${x.p}</span>
+                </div>
+                <div style="font-variant-numeric:tabular-nums;font-weight:700;">${formatNumber(x.v, 2)}</div>
+              </div>
+            `
+          )
+          .join("");
+
+        tipEl.innerHTML = title + body;
+
+        // position tooltip within card
+        const parent = tipEl.parentElement?.getBoundingClientRect();
+        const tipW = 240;
+        const tipH = 140;
+
+        const px = clamp(mx + 14, 8, (parent ? parent.width : rect.width) - tipW - 8);
+        const py = clamp(my + 14, 8, (parent ? parent.height : rect.height) - tipH - 8);
+
+        tipEl.style.left = `${px}px`;
+        tipEl.style.top = `${py}px`;
+        tipEl.style.display = "block";
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        if (tipEl) tipEl.style.display = "none";
+      });
+    }
+
+    // store latest hit regions + data for handlers
+    canvas.__owHit = hit;
+    canvas.__owValuesByDateProject = valuesByDateProject;
+    canvas.__owSeriesOrder = seriesOrder;
   }
 
   // ---------------------------------
@@ -444,41 +573,44 @@
   const statsMerged = document.getElementById("statsMerged");
   const downloadBtn = document.getElementById("downloadBtn");
 
-  if (
-    !incomesFile || !entriesFile ||
-    !runBtn || !resetBtn ||
-    !statusBox || !previewMerged || !statsMerged || !downloadBtn
-  ) return;
+  if (!incomesFile || !entriesFile || !runBtn || !resetBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
+    return;
+  }
 
   const statsPanel = ensureStatsPanel(statsMerged);
+
   const visCard = findVisualisationsCard();
   const chartsArea = ensureChartsArea(visCard);
 
   // Create chart blocks once
-  let chartIncome = null;
-  let chartDuration = null;
-  let chartRatio = null;
+  let incomeBlock, durationBlock, ratioBlock;
 
   if (chartsArea) {
     if (!chartsArea.querySelector("#owChartIncome")) {
-      const a = makeCanvasBlock("Income by project (stacked, by date)");
-      a.wrap.id = "owChartIncome";
-      chartsArea.appendChild(a.wrap);
-      chartIncome = a.canvas;
+      incomeBlock = makeCanvasBlock("Income by project (stacked, by date)");
+      incomeBlock.wrap.id = "owChartIncome";
+      chartsArea.appendChild(incomeBlock.wrap);
 
-      const b = makeCanvasBlock("Duration by project (stacked, by date)");
-      b.wrap.id = "owChartDuration";
-      chartsArea.appendChild(b.wrap);
-      chartDuration = b.canvas;
+      durationBlock = makeCanvasBlock("Duration by project (stacked, by date)");
+      durationBlock.wrap.id = "owChartDuration";
+      chartsArea.appendChild(durationBlock.wrap);
 
-      const c = makeCanvasBlock("Income / duration by project (stacked, by date)");
-      c.wrap.id = "owChartRatio";
-      chartsArea.appendChild(c.wrap);
-      chartRatio = c.canvas;
+      ratioBlock = makeCanvasBlock("Income / duration by project (stacked, by date)");
+      ratioBlock.wrap.id = "owChartRatio";
+      chartsArea.appendChild(ratioBlock.wrap);
     } else {
-      chartIncome = chartsArea.querySelector("#owChartIncome canvas");
-      chartDuration = chartsArea.querySelector("#owChartDuration canvas");
-      chartRatio = chartsArea.querySelector("#owChartRatio canvas");
+      const getBlock = (id) => {
+        const wrap = chartsArea.querySelector(id);
+        return {
+          wrap,
+          canvas: wrap?.querySelector("canvas") || null,
+          legend: wrap?.querySelector("div:nth-child(2)") || null, // title + legend + canvas + tip
+          tip: wrap?.querySelector("div:last-child") || null,
+        };
+      };
+      incomeBlock = getBlock("#owChartIncome");
+      durationBlock = getBlock("#owChartDuration");
+      ratioBlock = getBlock("#owChartRatio");
     }
   }
 
@@ -489,11 +621,19 @@
   function clearVisuals() {
     if (statsPanel) clearNode(statsPanel);
 
-    [chartIncome, chartDuration, chartRatio].forEach((c) => {
+    [incomeBlock?.canvas, durationBlock?.canvas, ratioBlock?.canvas].forEach((c) => {
       if (!c) return;
       const ctx = c.getContext("2d");
       if (!ctx) return;
       ctx.clearRect(0, 0, c.width, c.height);
+    });
+
+    [incomeBlock?.tip, durationBlock?.tip, ratioBlock?.tip].forEach((t) => {
+      if (t) t.style.display = "none";
+    });
+
+    [incomeBlock?.legend, durationBlock?.legend, ratioBlock?.legend].forEach((l) => {
+      if (l) l.innerHTML = "";
     });
   }
 
@@ -521,17 +661,14 @@
     const incomeAccessor = chooseIncomeAccessor(rows);
     const incomeLabel = incomeAccessor.label === "amount_gbp" ? "GBP" : "amount";
 
-    // totals
     let totalDuration = 0;
     let totalIncome = 0;
 
-    // per project totals
-    const projMap = new Map(); // project_name -> {income, duration}
+    const projMap = new Map(); // project -> {income, duration}
 
-    // by date -> per project values
-    const incomeByDateProject = new Map();   // date -> Map(project -> income)
-    const durationByDateProject = new Map(); // date -> Map(project -> duration)
-    const ratioByDateProject = new Map();    // date -> Map(project -> income/duration)
+    const incomeByDateProject = new Map();
+    const durationByDateProject = new Map();
+    const ratioByDateProject = new Map();
 
     const dateSet = new Set();
 
@@ -553,27 +690,19 @@
 
       if (!incomeByDateProject.has(date)) incomeByDateProject.set(date, new Map());
       if (!durationByDateProject.has(date)) durationByDateProject.set(date, new Map());
-      if (!ratioByDateProject.has(date)) ratioByDateProject.set(date, new Map());
 
-      const im = incomeByDateProject.get(date);
-      const dm = durationByDateProject.get(date);
-
-      im.set(project, (im.get(project) || 0) + income);
-      dm.set(project, (dm.get(project) || 0) + duration);
+      incomeByDateProject.get(date).set(project, (incomeByDateProject.get(date).get(project) || 0) + income);
+      durationByDateProject.get(date).set(project, (durationByDateProject.get(date).get(project) || 0) + duration);
     }
 
-    // compute ratio maps from income/duration sums
+    // ratio = income/duration per date/project
     for (const date of incomeByDateProject.keys()) {
       const im = incomeByDateProject.get(date) || new Map();
       const dm = durationByDateProject.get(date) || new Map();
-      const rm = ratioByDateProject.get(date) || new Map();
+      const rm = new Map();
 
       const projects = new Set([...im.keys(), ...dm.keys()]);
-      for (const p of projects) {
-        const i = im.get(p) || 0;
-        const d = dm.get(p) || 0;
-        rm.set(p, safeDiv(i, d));
-      }
+      for (const p of projects) rm.set(p, safeDiv(im.get(p) || 0, dm.get(p) || 0));
       ratioByDateProject.set(date, rm);
     }
 
@@ -590,67 +719,73 @@
     const durationByProject = [...projArr].sort((a, b) => b.duration - a.duration);
     const ratioByProject = [...projArr].sort((a, b) => b.ratio - a.ratio);
 
-    // Quick stats UI injection
+    // Quick stats UI injection (no new section)
     if (statsPanel) {
       clearNode(statsPanel);
 
-      const summary = makeSummaryGrid([
-        { k: "Row count", v: formatInt(rowCount) },
-        { k: "Total duration (hours)", v: formatNumber(totalDuration, 2) },
-        { k: `Total income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
-        { k: "Income / duration", v: formatNumber(overallRatio, 2) },
-      ]);
-      statsPanel.appendChild(summary);
+      statsPanel.appendChild(
+        makeSummaryGrid([
+          { k: "Row count", v: formatInt(rowCount) },
+          { k: "Total duration (hours)", v: formatNumber(totalDuration, 2) },
+          { k: `Total income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
+          { k: "Income / duration", v: formatNumber(overallRatio, 2) },
+        ])
+      );
 
       const topN = 8;
-
-      const t1 = makeMiniTable(
-        `Income by project (${incomeLabel})`,
-        incomeByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.income, 2) })),
-        { col1: "Project", col2: "Income" }
-      );
-
-      const t2 = makeMiniTable(
-        "Duration by project (hours)",
-        durationByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.duration, 2) })),
-        { col1: "Project", col2: "Hours" }
-      );
-
-      const t3 = makeMiniTable(
-        `Income / duration by project (${incomeLabel}/hour)`,
-        ratioByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.ratio, 2) })),
-        { col1: "Project", col2: "Ratio" }
-      );
 
       const grid = document.createElement("div");
       grid.style.display = "grid";
       grid.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
       grid.style.gap = "0.75rem";
 
-      grid.appendChild(t1);
-      grid.appendChild(t2);
-      grid.appendChild(t3);
+      grid.appendChild(
+        makeMiniTable(
+          `Income by project (${incomeLabel})`,
+          incomeByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.income, 2) })),
+          { col1: "Project", col2: "Income" }
+        )
+      );
+
+      grid.appendChild(
+        makeMiniTable(
+          "Duration by project (hours)",
+          durationByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.duration, 2) })),
+          { col1: "Project", col2: "Hours" }
+        )
+      );
+
+      grid.appendChild(
+        makeMiniTable(
+          `Income / duration by project (${incomeLabel}/hour)`,
+          ratioByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.ratio, 2) })),
+          { col1: "Project", col2: "Ratio" }
+        )
+      );
 
       statsPanel.appendChild(grid);
     }
 
-    // Charts: limit stack projects for readability
+    // Charts: show top N projects (readable)
     const maxProjects = 6;
     const topProjects = incomeByProject.slice(0, maxProjects).map((x) => x.name);
     const legendMore = Math.max(0, projArr.length - topProjects.length);
 
     const dates = sortIsoDates(dateSet);
 
-    drawStackedBars(chartIncome, dates, topProjects, incomeByDateProject, {
-      legend: topProjects,
+    drawStackedBars(incomeBlock?.canvas, incomeBlock?.legend, incomeBlock?.tip, dates, topProjects, incomeByDateProject, {
       legendMore,
     });
-    drawStackedBars(chartDuration, dates, topProjects, durationByDateProject, {
-      legend: topProjects,
-      legendMore,
-    });
-    drawStackedBars(chartRatio, dates, topProjects, ratioByDateProject, {
-      legend: topProjects,
+    drawStackedBars(
+      durationBlock?.canvas,
+      durationBlock?.legend,
+      durationBlock?.tip,
+      dates,
+      topProjects,
+      durationByDateProject,
+      { legendMore }
+    );
+    drawStackedBars(ratioBlock?.canvas, ratioBlock?.legend, ratioBlock?.tip, dates, topProjects, ratioByDateProject, {
       legendMore,
     });
   }
@@ -694,7 +829,6 @@
 
       const data = await res.json();
 
-      // Always show raw backend stats JSON in the textarea
       statsMerged.value = JSON.stringify(data.stats ?? {}, null, 2);
 
       const hasCsv = typeof data.download_csv === "string" && data.download_csv.length > 0;
@@ -703,7 +837,6 @@
         return;
       }
 
-      // Preview + download
       previewMerged.value = (data.preview_csv ?? "").slice(0, 8000);
 
       const blob = new Blob([data.download_csv], { type: "text/csv;charset=utf-8" });
@@ -711,7 +844,6 @@
       downloadBtn.href = url;
       downloadBtn.style.display = "inline-flex";
 
-      // Build the “Quick stats” breakdown + 3 stacked charts
       buildStatsAndChartsFromCsv(data.download_csv);
 
       setStatus(`Done ✔ (${data.mode ?? "ok"})`);
