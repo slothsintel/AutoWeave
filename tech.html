@@ -1,3 +1,4 @@
+<!-- tech.html (updated) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +7,6 @@
   <title>AutoWeave — Human-guided ETL</title>
   <meta name="description" content="Human-guided ETL: async threads, merges, and checkpoints for reliable pipelines." />
   <link rel="stylesheet" href="style.css" />
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -101,85 +101,57 @@
 
         <p>
           Start here to understand the structure and the “threads → merge → checkpoint” model.
-          This page runs locally in your browser (no database required at this stage).
+          This input preview runs locally (browser-only).
         </p>
 
         <h2>Workflow</h2>
-        <div class="aw-card">  
+        <div class="aw-card">
           <div class="contact-form" style="max-width: 100%;">
             <div class="spacer-lg"></div>
-              <figure class="figure-half zoomable">
-                <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
-                <div class="hybrid-legend">
-                  <span class="legend-pill">Async inputs</span>
-                  <span class="legend-pill">Merge points</span>
-                  <span class="legend-pill">Checkpoints</span>
-                  <span class="legend-pill">Clean outputs</span>
-                </div>
+            <figure class="figure-half zoomable">
+              <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
+              <div class="hybrid-legend">
+                <span class="legend-pill">Async inputs</span>
+                <span class="legend-pill">Merge points</span>
+                <span class="legend-pill">Checkpoints</span>
+                <span class="legend-pill">Clean outputs</span>
               </div>
-              <p class="aw-card__desc">
-                Tip: once you see the “clean” baseline, it’s easier to understand where human checkpoints are required:
-                renames, duplicates, ambiguous categories, and edge cases.
-              </p>
-            </div> 
+            </figure>
 
-      <div class="spacer-lg"></div>
-
-      <h2>Inputs</h2>
-      <div class="aw-card">
-        <p class="aw-card__desc">
-          Take a glimpse of <a href="assets/technology/autotrac_export_month_2026-02_projects.csv" download>project csv</a>, 
-          <a href="assets/technology/autotrac_export_month_2026-02_incomes.csv" download>income csv</a>, 
-          and <a href="assets/technology/autotrac_export_month_2026-02_time_entries.csv" download>time entries csv</a> 
-          examples to upload  before trying your own CSVs.
-        </p>
-        <div class="contact-form" style="max-width: 100%;">
-          <div class="form-row">
-            <label for="fileInput">Upload a CSV</label>
-            <input id="fileInput" type="file" accept=".csv,text/csv" />
-          </div>
-          <button type="button" id="clearBtn">Clear</button>
-        </div>
-        <div class="contact-form" style="max-width: 100%;">
-          <div class="form-row">
-            <label>What you’ll see</label>
-            <textarea readonly>
-- A clean CSV preview (first ~30 lines)
-- Row/column summary + basic structure metrics
-- Thread merge diagram + checkpoint concepts
-            </textarea>
-            <div class="contact-form" style="max-width: 100%;">
-              <div class="form-row">
-                <label>Preview</label>
-                <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
-              </div>
-            </div> 
+            <p class="aw-card__desc">
+              Tip: once you see the “clean” baseline, it’s easier to understand where human checkpoints are required:
+              renames, duplicates, ambiguous categories, and edge cases.
+            </p>
           </div>
         </div>
-      </div> 
 
-      <div class="spacer-lg"></div>
-      <h2>Merges</h2>
-      <div class="aw-card">
-        <p class="aw-card__desc">
-          Trimming, normalisation, and merge rules are applied to create a clean baseline output. 
-        </p>
-      </div>
+        <div class="spacer-lg"></div>
 
-      <div class="spacer-lg"></div>
-      <h2>Checkpoints</h2>
-      <div class="aw-card">
-        <p class="aw-card__desc">
-          Human checkpoints are designed to catch edge cases and ensure correctness in context.
-        </p>         
-      </div>
+        <h2>Inputs</h2>
+        <div class="aw-card">
+          <p class="aw-card__desc">
+            Try sample AutoTrac exports:
+            <a href="assets/technology/autotrac_export_month_2026-02_projects.csv" download>project csv</a>,
+            <a href="assets/technology/autotrac_export_month_2026-02_incomes.csv" download>income csv</a>,
+            <a href="assets/technology/autotrac_export_month_2026-02_time_entries.csv" download>time entries csv</a>.
+          </p>
 
-      <div class="spacer-lg"></div>
-      <h2>Visualisations</h2>
-      <div class="aw-card">
-        <p class="aw-card__desc">
-          Quick stats and charts are designed to make structure and edge cases visible at a glance, so you can focus your attention where it’s needed most.
-        </p>
+          <div class="contact-form" style="max-width: 100%;">
+            <div class="form-row">
+              <label for="guidedFileInput">Upload a CSV</label>
+              <input id="guidedFileInput" type="file" accept=".csv,text/csv" />
+            </div>
+            <button type="button" id="guidedClearBtn">Clear</button>
+          </div>
+
+          <div class="contact-form" style="max-width: 100%;">
+            <div class="form-row">
+              <label>Preview (local)</label>
+              <textarea id="guidedPreview" readonly placeholder="Your CSV preview will appear here…"></textarea>
+            </div>
+          </div>
+        </div>
+
       </div>
     </section>
 
@@ -190,8 +162,7 @@
         <div class="divider"></div>
 
         <p>
-          Upload CSVs to preview structure and generate quick summaries.
-          Processing runs locally in your browser (no database required at this stage).
+          Upload 3 CSVs. AutoWeave will trim + attempt a merge on the backend, then return a preview + downloadable output.
         </p>
 
         <div class="spacer-lg"></div>
@@ -208,30 +179,42 @@
               <div class="aw-card">
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <h4 class="aw-card__title">Upload a project CSV</h4>
-                    <input id="fileInput" type="file" accept=".csv,text/csv" />
+                    <h4 class="aw-card__title">Project CSV</h4>
+                    <input id="projectsFile" type="file" accept=".csv,text/csv" />
                   </div>
-                  <button type="button" id="clearBtn">Clear</button>
                 </div>
               </div>
 
               <div class="aw-card">
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <h4 class="aw-card__title">Upload an income CSV</h4>
-                    <input id="fileInput" type="file" accept=".csv,text/csv" />
+                    <h4 class="aw-card__title">Income CSV</h4>
+                    <input id="incomesFile" type="file" accept=".csv,text/csv" />
                   </div>
-                  <button type="button" id="clearBtn">Clear</button>
                 </div>
               </div>
-              
+
               <div class="aw-card">
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <h4 class="aw-card__title">Upload a time entries CSV</h4>
-                    <input id="fileInput" type="file" accept=".csv,text/csv" />
+                    <h4 class="aw-card__title">Time entries CSV</h4>
+                    <input id="entriesFile" type="file" accept=".csv,text/csv" />
                   </div>
-                  <button type="button" id="clearBtn">Clear</button>
+                </div>
+              </div>
+
+              <div class="aw-card">
+                <div class="contact-form" style="max-width: 100%;">
+                  <div class="form-row" style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+                    <button type="button" id="runMergeBtn">Run merge</button>
+                    <button type="button" id="resetAllBtn">Reset</button>
+                    <a id="downloadBtn" class="nav-link" href="#" download="autoweave_merged.csv" style="display:none;">
+                      Download merged CSV
+                    </a>
+                  </div>
+                  <div class="form-row">
+                    <textarea id="statusBox" readonly placeholder="Status will appear here…"></textarea>
+                  </div>
                 </div>
               </div>
             </div>
@@ -247,23 +230,20 @@
             <div class="aw-pane__body">
               <div class="aw-card">
                 <h4 class="aw-card__title">Preview</h4>
-                <p class="aw-card__desc">First ~30 lines of your merged CSV.</p>
-
+                <p class="aw-card__desc">First lines of the returned output.</p>
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <textarea id="preview" readonly placeholder="Your CSV preview will appear here…"></textarea>
+                    <textarea id="previewMerged" readonly placeholder="Merged preview will appear here…"></textarea>
                   </div>
                 </div>
               </div>
 
               <div class="aw-card">
                 <h4 class="aw-card__title">Quick stats</h4>
-                <p class="aw-card__desc">
-                    Row and column summary with indicative structure metrics.
-                </p>
+                <p class="aw-card__desc">Returned stats + join key info.</p>
                 <div class="contact-form" style="max-width: 100%;">
                   <div class="form-row">
-                    <textarea id="stats" readonly placeholder="Rows/columns + basic stats will appear here…"></textarea>
+                    <textarea id="statsMerged" readonly placeholder="Stats will appear here…"></textarea>
                   </div>
                 </div>
               </div>
@@ -272,8 +252,7 @@
                 <h4 class="aw-card__title">Visualisations</h4>
                 <div class="hybrid-diagram" style="margin: 1rem auto 1.2rem;">
                   <img src="assets/technology/merge_diagram.drawio.svg" alt="AutoWeave thread merge diagram" loading="lazy" />
-                  <div class="hybrid-legend">
-                  </div>
+                  <div class="hybrid-legend"></div>
                 </div>
               </div>
             </div>
@@ -341,7 +320,6 @@
       });
 
       closeBtn?.addEventListener("click", closeNav);
-
       mobileNav?.querySelectorAll("a").forEach(a => a.addEventListener("click", closeNav));
 
       document.addEventListener("keydown", (e) => {
@@ -350,18 +328,14 @@
 
       document.addEventListener("click", (e) => {
         if (!mobileNav.classList.contains("is-open")) return;
-
         const target = e.target;
         if (!(target instanceof Node)) return;
-
         const clickedInsidePanel = mobileNav.contains(target);
         const clickedToggle = toggle && toggle.contains(target);
-
         if (!clickedInsidePanel && !clickedToggle) closeNav();
       });
     </script>
 
-    <!-- Keep your existing AutoWeave CSV demo logic -->
     <script src="./script.js"></script>
   </main>
 </body>
