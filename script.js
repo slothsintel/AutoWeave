@@ -3,7 +3,12 @@
 // - Workbench: calls AutoWeave backend, renders preview/stats
 // - Quick stats: row count, totals, ratios, per-project breakdowns
 // - Visualisations: 3 stacked bar charts by date (income, duration, income/duration)
-//   with color legend + floating tooltip (AutoTrac style)
+//   with AutoTrac Pro-style controls:
+//   - pill buttons for range + grouping
+//   - custom range date picker
+//   - smooth fade on redraw
+//   - cumulative mode toggle
+//   - export PNG (all charts combined)
 
 (() => {
   // -----------------------------
@@ -116,6 +121,10 @@
     return [...dates].sort((a, b) => String(a).localeCompare(String(b)));
   }
 
+  function clamp(n, a, b) {
+    return Math.max(a, Math.min(b, n));
+  }
+
   // Income metric selector: prefer amount_gbp if any non-empty amount_gbp exists
   function chooseIncomeAccessor(rows) {
     const anyGbp = rows.some((r) => (r.amount_gbp ?? "").toString().trim() !== "");
@@ -123,6 +132,55 @@
       label: anyGbp ? "amount_gbp" : "amount",
       get: (r) => toNumber(anyGbp ? r.amount_gbp : r.amount),
     };
+  }
+
+  // ---------------------------------
+  // Helpers: Dates + grouping
+  // ---------------------------------
+
+  function toDateObj(str) {
+    const s = String(str || "").trim();
+    if (!s) return null;
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  function isoWeekKey(date) {
+    // ISO week year + week number
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const day = d.getUTCDay() || 7; // 1..7 (Mon..Sun)
+    d.setUTCDate(d.getUTCDate() + 4 - day);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+    const y = d.getUTCFullYear();
+    return `${y}-W${String(weekNo).padStart(2, "0")}`;
+  }
+
+  function formatGroupKey(date, mode) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+
+    if (mode === "day") return `${y}-${m}-${dd}`;
+    if (mode === "month") return `${y}-${m}`;
+    if (mode === "year") return `${y}`;
+    if (mode === "week") return isoWeekKey(date);
+
+    return `${y}-${m}-${dd}`;
+  }
+
+  function dateToISO(dateObj) {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function getMinMaxDates(isoDates) {
+    const parsed = isoDates.map(toDateObj).filter(Boolean);
+    if (!parsed.length) return { min: null, max: null };
+    parsed.sort((a, b) => a - b);
+    return { min: parsed[0], max: parsed[parsed.length - 1] };
   }
 
   // ---------------------------------
@@ -270,7 +328,7 @@
     area.id = "owChartsArea";
     area.style.display = "grid";
     area.style.gap = "0.9rem";
-    area.style.marginTop = "0.75rem";
+    area.style.marginTop = "0.6rem";
 
     const diagram = visCard.querySelector(".hybrid-diagram");
     if (diagram && diagram.parentElement) diagram.parentElement.appendChild(area);
@@ -279,6 +337,216 @@
     return area;
   }
 
+  // ---------------------------------
+  // Visualisation Controls (AutoTrac Pro-ish)
+  // ---------------------------------
+
+  function stylePillButton(btn) {
+    btn.type = "button";
+    btn.style.height = "36px";
+    btn.style.padding = "0 12px";
+    btn.style.borderRadius = "9999px";
+    btn.style.border = "1px solid rgba(15,31,23,0.14)";
+    btn.style.background = "rgba(255,255,255,0.92)";
+    btn.style.color = "rgba(15,31,23,0.74)";
+    btn.style.fontSize = "12px";
+    btn.style.fontWeight = "750";
+    btn.style.letterSpacing = "0.03em";
+    btn.style.textTransform = "uppercase";
+    btn.style.cursor = "pointer";
+    btn.style.userSelect = "none";
+    btn.style.boxShadow = "0 8px 18px rgba(0,0,0,0.06)";
+    btn.style.transition = "transform 120ms ease, background 160ms ease, border-color 160ms ease, opacity 160ms ease";
+    btn.addEventListener("mouseenter", () => {
+      btn.style.transform = "translateY(-1px)";
+      btn.style.borderColor = "rgba(15,31,23,0.22)";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.transform = "translateY(0)";
+      btn.style.borderColor = "rgba(15,31,23,0.14)";
+    });
+  }
+
+  function setPillActive(btn, isActive) {
+    if (!btn) return;
+    if (isActive) {
+      btn.dataset.active = "1";
+      btn.style.background = "rgba(15,31,23,0.92)";
+      btn.style.color = "rgba(255,255,255,0.92)";
+      btn.style.borderColor = "rgba(15,31,23,0.92)";
+      btn.style.boxShadow = "0 12px 26px rgba(0,0,0,0.16)";
+    } else {
+      btn.dataset.active = "0";
+      btn.style.background = "rgba(255,255,255,0.92)";
+      btn.style.color = "rgba(15,31,23,0.74)";
+      btn.style.borderColor = "rgba(15,31,23,0.14)";
+      btn.style.boxShadow = "0 8px 18px rgba(0,0,0,0.06)";
+    }
+  }
+
+  function makePillGroup(labelText) {
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "0.25rem";
+
+    const label = document.createElement("div");
+    label.textContent = labelText;
+    label.style.fontSize = "0.75rem";
+    label.style.letterSpacing = "0.03em";
+    label.style.textTransform = "uppercase";
+    label.style.opacity = "0.65";
+
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "0.5rem";
+    row.style.flexWrap = "wrap";
+
+    wrap.appendChild(label);
+    wrap.appendChild(row);
+
+    return { wrap, row };
+  }
+
+  function ensureChartControls(visCard, chartsArea) {
+    if (!visCard || !chartsArea) return null;
+
+    const existing = visCard.querySelector("#owChartControls");
+    if (existing) return existing.__owApi || null;
+
+    const bar = document.createElement("div");
+    bar.id = "owChartControls";
+    bar.style.display = "flex";
+    bar.style.flexWrap = "wrap";
+    bar.style.gap = "0.9rem";
+    bar.style.alignItems = "flex-end";
+    bar.style.padding = "0.75rem";
+    bar.style.borderRadius = "14px";
+    bar.style.border = "1px solid rgba(15,31,23,0.10)";
+    bar.style.background = "rgba(255,255,255,0.70)";
+    bar.style.boxShadow = "0 12px 24px rgba(0,0,0,0.06)";
+    bar.style.marginTop = "0.4rem";
+    bar.style.marginBottom = "0.65rem";
+
+    // Range group
+    const range = makePillGroup("Date range");
+    const rangeBtns = new Map();
+
+    const ranges = [
+      { id: "14", label: "Last 14 days" },
+      { id: "30", label: "Last 30" },
+      { id: "90", label: "Last 90" },
+      { id: "all", label: "All time" },
+      { id: "custom", label: "Custom" },
+    ];
+
+    ranges.forEach((r) => {
+      const b = document.createElement("button");
+      b.textContent = r.label;
+      b.dataset.value = r.id;
+      stylePillButton(b);
+      range.row.appendChild(b);
+      rangeBtns.set(r.id, b);
+    });
+
+    // Custom range pickers
+    const customWrap = document.createElement("div");
+    customWrap.style.display = "none";
+    customWrap.style.gap = "0.6rem";
+    customWrap.style.alignItems = "center";
+    customWrap.style.flexWrap = "wrap";
+    customWrap.style.marginTop = "0.35rem";
+
+    const from = document.createElement("input");
+    from.type = "date";
+    from.id = "owCustomFrom";
+    from.style.height = "36px";
+    from.style.borderRadius = "10px";
+    from.style.border = "1px solid rgba(15,31,23,0.14)";
+    from.style.padding = "0 10px";
+    from.style.background = "rgba(255,255,255,0.92)";
+
+    const to = document.createElement("input");
+    to.type = "date";
+    to.id = "owCustomTo";
+    to.style.height = "36px";
+    to.style.borderRadius = "10px";
+    to.style.border = "1px solid rgba(15,31,23,0.14)";
+    to.style.padding = "0 10px";
+    to.style.background = "rgba(255,255,255,0.92)";
+
+    const apply = document.createElement("button");
+    apply.textContent = "Apply";
+    stylePillButton(apply);
+
+    customWrap.appendChild(from);
+    customWrap.appendChild(to);
+    customWrap.appendChild(apply);
+    range.wrap.appendChild(customWrap);
+
+    // Grouping group
+    const group = makePillGroup("Group");
+    const groupBtns = new Map();
+
+    const groups = [
+      { id: "day", label: "Day" },
+      { id: "week", label: "Week" },
+      { id: "month", label: "Month" },
+      { id: "year", label: "Year" },
+    ];
+
+    groups.forEach((g) => {
+      const b = document.createElement("button");
+      b.textContent = g.label;
+      b.dataset.value = g.id;
+      stylePillButton(b);
+      group.row.appendChild(b);
+      groupBtns.set(g.id, b);
+    });
+
+    // Toggles group
+    const toggles = makePillGroup("Mode");
+    const cumulativeBtn = document.createElement("button");
+    cumulativeBtn.textContent = "Cumulative";
+    stylePillButton(cumulativeBtn);
+
+    toggles.row.appendChild(cumulativeBtn);
+
+    // Export group
+    const exportG = makePillGroup("Export");
+    const exportBtn = document.createElement("button");
+    exportBtn.textContent = "Export PNG";
+    stylePillButton(exportBtn);
+    exportG.row.appendChild(exportBtn);
+
+    bar.appendChild(range.wrap);
+    bar.appendChild(group.wrap);
+    bar.appendChild(toggles.wrap);
+    bar.appendChild(exportG.wrap);
+
+    visCard.insertBefore(bar, chartsArea);
+
+    const api = {
+      el: bar,
+      rangeBtns,
+      groupBtns,
+      customWrap,
+      customFrom: from,
+      customTo: to,
+      customApply: apply,
+      cumulativeBtn,
+      exportBtn,
+      setCustomVisible: (v) => (customWrap.style.display = v ? "flex" : "none"),
+    };
+
+    bar.__owApi = api;
+    return api;
+  }
+
+  // ---------------------------------
+  // Canvas blocks
+  // ---------------------------------
+
   function makeCanvasBlock(title) {
     const wrap = document.createElement("div");
     wrap.style.border = "1px solid rgba(15,31,23,0.10)";
@@ -286,10 +554,11 @@
     wrap.style.borderRadius = "14px";
     wrap.style.padding = "0.75rem";
     wrap.style.position = "relative";
+    wrap.style.transition = "opacity 180ms ease"; // fade on redraw
 
     const h = document.createElement("div");
     h.textContent = title;
-    h.style.fontWeight = "700";
+    h.style.fontWeight = "800";
     h.style.marginBottom = "0.35rem";
     wrap.appendChild(h);
 
@@ -400,17 +669,10 @@
     }
   }
 
-  function clamp(n, a, b) {
-    return Math.max(a, Math.min(b, n));
-  }
-
   function drawStackedBars(canvas, legendEl, tipEl, dates, seriesOrder, valuesByDateProject, opts) {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    // Draw + hit regions for hover
-    const hit = []; // {x,y,w,h,date,project,value}
 
     const cssW = canvas.clientWidth || 800;
     const cssH = canvas.clientHeight || 220;
@@ -420,17 +682,20 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
+    const hit = []; // {x,y,w,h,date,project,value}
     const padding = { l: 10, r: 10, t: 8, b: 34 };
     const w = cssW - padding.l - padding.r;
     const h = cssH - padding.t - padding.b;
 
-    // legend chips
     setLegendChips(legendEl, seriesOrder, opts?.legendMore || 0);
 
     if (!dates.length || !seriesOrder.length) {
       ctx.font = "12px system-ui, sans-serif";
       ctx.fillStyle = "rgba(15,31,23,0.55)";
       ctx.fillText("No chart data available.", padding.l, padding.t + 16);
+      canvas.__owHit = [];
+      canvas.__owValuesByDateProject = valuesByDateProject;
+      canvas.__owSeriesOrder = seriesOrder;
       return;
     }
 
@@ -480,7 +745,9 @@
 
       if (i % step === 0 || i === dates.length - 1) {
         const label = String(date || "");
-        const short = label.length >= 10 ? label.slice(5) : label; // MM-DD if YYYY-MM-DD
+        let short = label;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(label)) short = label.slice(5);
+        else if (/^\d{4}-W\d{2}$/.test(label)) short = label.slice(5);
         ctx.font = "11px system-ui, sans-serif";
         ctx.fillStyle = "rgba(15,31,23,0.60)";
         ctx.textAlign = "center";
@@ -488,7 +755,12 @@
       }
     }
 
-    // Hover tooltip (one handler per canvas)
+    // Store latest hit regions + data for handlers
+    canvas.__owHit = hit;
+    canvas.__owValuesByDateProject = valuesByDateProject;
+    canvas.__owSeriesOrder = seriesOrder;
+
+    // Hover tooltip (bind once per canvas)
     if (!canvas.__owHoverBound) {
       canvas.__owHoverBound = true;
 
@@ -499,17 +771,19 @@
         const mx = ev.clientX - rect.left;
         const my = ev.clientY - rect.top;
 
-        // find topmost hit segment under cursor
-        const seg = hit.find((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
+        const regions = canvas.__owHit || [];
+        const seg = regions.find((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
         if (!seg) {
           tipEl.style.display = "none";
           return;
         }
 
-        // Build tooltip: date + all project values for that date (for visible series)
-        const perProj = valuesByDateProject.get(seg.date) || new Map();
+        const valuesMap = canvas.__owValuesByDateProject || new Map();
+        const series = canvas.__owSeriesOrder || [];
 
-        const lines = seriesOrder
+        const perProj = valuesMap.get(seg.date) || new Map();
+
+        const lines = series
           .map((p) => ({ p, v: perProj.get(p) || 0 }))
           .filter((x) => x.v > 0)
           .sort((a, b) => b.v - a.v);
@@ -531,7 +805,6 @@
 
         tipEl.innerHTML = title + body;
 
-        // position tooltip within card
         const parent = tipEl.parentElement?.getBoundingClientRect();
         const tipW = 240;
         const tipH = 140;
@@ -548,11 +821,341 @@
         if (tipEl) tipEl.style.display = "none";
       });
     }
+  }
 
-    // store latest hit regions + data for handlers
-    canvas.__owHit = hit;
-    canvas.__owValuesByDateProject = valuesByDateProject;
-    canvas.__owSeriesOrder = seriesOrder;
+  // ---------------------------------
+  // Chart controller (modular)
+  // ---------------------------------
+
+  function createChartController({ visCard, chartsArea, incomeBlock, durationBlock, ratioBlock }) {
+    const controls = ensureChartControls(visCard, chartsArea);
+
+    const state = {
+      range: "14", // 14|30|90|all|custom
+      group: "day", // day|week|month|year
+      cumulative: false,
+      customFrom: "",
+      customTo: "",
+    };
+
+    const data = {
+      dates: [],
+      topProjects: [],
+      legendMore: 0,
+      incomeByDateProject: new Map(),
+      durationByDateProject: new Map(),
+      minDate: null,
+      maxDate: null,
+    };
+
+    function setRange(next) {
+      state.range = next;
+      for (const [k, b] of controls.rangeBtns.entries()) setPillActive(b, k === next);
+      controls.setCustomVisible(next === "custom");
+      requestRender();
+    }
+
+    function setGroup(next) {
+      state.group = next;
+      for (const [k, b] of controls.groupBtns.entries()) setPillActive(b, k === next);
+      requestRender();
+    }
+
+    function setCumulative(on) {
+      state.cumulative = !!on;
+      setPillActive(controls.cumulativeBtn, state.cumulative);
+      requestRender();
+    }
+
+    function setCustomRange(from, to) {
+      state.customFrom = from || "";
+      state.customTo = to || "";
+      controls.customFrom.value = state.customFrom;
+      controls.customTo.value = state.customTo;
+      requestRender();
+    }
+
+    function setData(next) {
+      data.dates = next.dates || [];
+      data.topProjects = next.topProjects || [];
+      data.legendMore = next.legendMore || 0;
+      data.incomeByDateProject = next.incomeByDateProject || new Map();
+      data.durationByDateProject = next.durationByDateProject || new Map();
+      data.minDate = next.minDate || null;
+      data.maxDate = next.maxDate || null;
+
+      if (data.minDate && data.maxDate) {
+        controls.customFrom.min = dateToISO(data.minDate);
+        controls.customFrom.max = dateToISO(data.maxDate);
+        controls.customTo.min = dateToISO(data.minDate);
+        controls.customTo.max = dateToISO(data.maxDate);
+
+        if (!state.customFrom) state.customFrom = dateToISO(data.minDate);
+        if (!state.customTo) state.customTo = dateToISO(data.maxDate);
+        controls.customFrom.value = state.customFrom;
+        controls.customTo.value = state.customTo;
+      }
+
+      requestRender();
+    }
+
+    function computeFilteredDates() {
+      const all = data.dates;
+      if (!all.length) return [];
+
+      const { max } = getMinMaxDates(all);
+      const anchor = max || new Date();
+
+      if (state.range === "all") return [...all];
+
+      if (state.range === "custom") {
+        const fromD = toDateObj(state.customFrom);
+        const toD = toDateObj(state.customTo);
+        if (!fromD || !toD) return [...all];
+        const fromT = new Date(fromD.getFullYear(), fromD.getMonth(), fromD.getDate()).getTime();
+        const toT = new Date(toD.getFullYear(), toD.getMonth(), toD.getDate()).getTime();
+        const lo = Math.min(fromT, toT);
+        const hi = Math.max(fromT, toT);
+        return all.filter((d) => {
+          const dt = toDateObj(d);
+          if (!dt) return false;
+          const t = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+          return t >= lo && t <= hi;
+        });
+      }
+
+      const days = Number(state.range) || 14;
+      const cutoff = new Date(anchor);
+      cutoff.setDate(cutoff.getDate() - (days - 1));
+      const cutoffT = new Date(cutoff.getFullYear(), cutoff.getMonth(), cutoff.getDate()).getTime();
+
+      return all.filter((d) => {
+        const dt = toDateObj(d);
+        if (!dt) return false;
+        const t = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
+        return t >= cutoffT;
+      });
+    }
+
+    function regroup(sourceMap, filteredDates) {
+      const out = new Map();
+      for (const d of filteredDates) {
+        const dt = toDateObj(d);
+        if (!dt) continue;
+
+        const key = formatGroupKey(dt, state.group);
+        const perProj = sourceMap.get(d) || new Map();
+
+        if (!out.has(key)) out.set(key, new Map());
+        const dest = out.get(key);
+
+        for (const [p, v] of perProj.entries()) {
+          dest.set(p, (dest.get(p) || 0) + v);
+        }
+      }
+      return out;
+    }
+
+    function applyCumulative(groupedMap, projects) {
+      const keys = sortIsoDates([...groupedMap.keys()]);
+      const running = new Map(projects.map((p) => [p, 0]));
+      const out = new Map();
+
+      for (const k of keys) {
+        const perProj = groupedMap.get(k) || new Map();
+        const cum = new Map();
+        for (const p of projects) {
+          const next = (running.get(p) || 0) + (perProj.get(p) || 0);
+          running.set(p, next);
+          cum.set(p, next);
+        }
+        out.set(k, cum);
+      }
+      return out;
+    }
+
+    function applyCumulativeRate(incomeGrouped, durationGrouped, projects) {
+      const keys = sortIsoDates([...incomeGrouped.keys()]);
+      const runningIncome = new Map(projects.map((p) => [p, 0]));
+      const runningDur = new Map(projects.map((p) => [p, 0]));
+      const out = new Map();
+
+      for (const k of keys) {
+        const im = incomeGrouped.get(k) || new Map();
+        const dm = durationGrouped.get(k) || new Map();
+        const rm = new Map();
+
+        for (const p of projects) {
+          runningIncome.set(p, (runningIncome.get(p) || 0) + (im.get(p) || 0));
+          runningDur.set(p, (runningDur.get(p) || 0) + (dm.get(p) || 0));
+          rm.set(p, safeDiv(runningIncome.get(p) || 0, runningDur.get(p) || 0));
+        }
+        out.set(k, rm);
+      }
+      return out;
+    }
+
+    let raf = 0;
+    function requestRender() {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(render);
+    }
+
+    function fadeBlocks(on) {
+      const blocks = [incomeBlock?.wrap, durationBlock?.wrap, ratioBlock?.wrap].filter(Boolean);
+      blocks.forEach((w) => (w.style.opacity = on ? "0.25" : "1"));
+    }
+
+    function render() {
+      raf = 0;
+      if (!data.dates.length || !data.topProjects.length) return;
+
+      fadeBlocks(true);
+
+      const filteredDates = computeFilteredDates();
+
+      const incomeGrouped = regroup(data.incomeByDateProject, filteredDates);
+      const durationGrouped = regroup(data.durationByDateProject, filteredDates);
+
+      const ratioGrouped = (() => {
+        const keys = new Set([...incomeGrouped.keys(), ...durationGrouped.keys()]);
+        const out = new Map();
+        for (const k of keys) {
+          const im = incomeGrouped.get(k) || new Map();
+          const dm = durationGrouped.get(k) || new Map();
+          const rm = new Map();
+          for (const p of data.topProjects) rm.set(p, safeDiv(im.get(p) || 0, dm.get(p) || 0));
+          out.set(k, rm);
+        }
+        return out;
+      })();
+
+      let incomeFinal = incomeGrouped;
+      let durationFinal = durationGrouped;
+      let ratioFinal = ratioGrouped;
+
+      if (state.cumulative) {
+        incomeFinal = applyCumulative(incomeGrouped, data.topProjects);
+        durationFinal = applyCumulative(durationGrouped, data.topProjects);
+        ratioFinal = applyCumulativeRate(incomeGrouped, durationGrouped, data.topProjects);
+      }
+
+      const groupedDates = sortIsoDates([...incomeFinal.keys()]);
+
+      setTimeout(() => {
+        drawStackedBars(
+          incomeBlock?.canvas,
+          incomeBlock?.legend,
+          incomeBlock?.tip,
+          groupedDates,
+          data.topProjects,
+          incomeFinal,
+          { legendMore: data.legendMore }
+        );
+        drawStackedBars(
+          durationBlock?.canvas,
+          durationBlock?.legend,
+          durationBlock?.tip,
+          groupedDates,
+          data.topProjects,
+          durationFinal,
+          { legendMore: data.legendMore }
+        );
+        drawStackedBars(
+          ratioBlock?.canvas,
+          ratioBlock?.legend,
+          ratioBlock?.tip,
+          groupedDates,
+          data.topProjects,
+          ratioFinal,
+          { legendMore: data.legendMore }
+        );
+        fadeBlocks(false);
+      }, 60);
+    }
+
+    function exportPng() {
+      const blocks = [
+        { title: "Income", canvas: incomeBlock?.canvas },
+        { title: "Duration", canvas: durationBlock?.canvas },
+        { title: "Rate", canvas: ratioBlock?.canvas },
+      ].filter((x) => x.canvas);
+
+      if (!blocks.length) return;
+
+      const widths = blocks.map((b) => b.canvas.width);
+      const heights = blocks.map((b) => b.canvas.height);
+
+      const pad = 28;
+      const titleH = 34;
+
+      const outW = Math.max(...widths);
+      const outH =
+        pad + blocks.length * titleH + heights.reduce((a, b) => a + b, 0) + pad + (blocks.length - 1) * 18;
+
+      const out = document.createElement("canvas");
+      out.width = outW;
+      out.height = outH;
+      const ctx = out.getContext("2d");
+      if (!ctx) return;
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, outW, outH);
+
+      let y = pad;
+
+      ctx.fillStyle = "rgba(15,31,23,0.92)";
+      ctx.font = "700 18px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillText("AutoWeave — Visualisations", pad, y);
+      y += 22;
+
+      const meta =
+        `Range: ${state.range === "custom" ? `${state.customFrom} → ${state.customTo}` : state.range} | ` +
+        `Group: ${state.group} | ` +
+        `Mode: ${state.cumulative ? "cumulative" : "daily"}`;
+      ctx.fillStyle = "rgba(15,31,23,0.65)";
+      ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillText(meta, pad, y);
+      y += 22;
+
+      blocks.forEach((b, i) => {
+        ctx.fillStyle = "rgba(15,31,23,0.88)";
+        ctx.font = "800 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+        ctx.fillText(b.title, pad, y + 18);
+
+        y += titleH;
+
+        const x = Math.floor((outW - b.canvas.width) / 2);
+        ctx.drawImage(b.canvas, x, y);
+
+        y += b.canvas.height;
+        if (i !== blocks.length - 1) y += 18;
+      });
+
+      const a = document.createElement("a");
+      a.download = "autoweave_visualisations.png";
+      a.href = out.toDataURL("image/png");
+      a.click();
+    }
+
+    // Wire events + defaults
+    setRange(state.range);
+    setGroup(state.group);
+    setCumulative(state.cumulative);
+
+    controls.rangeBtns.forEach((btn, key) => btn.addEventListener("click", () => setRange(key)));
+    controls.groupBtns.forEach((btn, key) => btn.addEventListener("click", () => setGroup(key)));
+    controls.cumulativeBtn.addEventListener("click", () => setCumulative(!state.cumulative));
+
+    controls.customApply.addEventListener("click", () => {
+      const f = controls.customFrom.value;
+      const t = controls.customTo.value;
+      if (f && t) setCustomRange(f, t);
+    });
+
+    controls.exportBtn.addEventListener("click", exportPng);
+
+    return { setData, render, exportPng };
   }
 
   // ---------------------------------
@@ -604,7 +1207,7 @@
         return {
           wrap,
           canvas: wrap?.querySelector("canvas") || null,
-          legend: wrap?.querySelector("div:nth-child(2)") || null, // title + legend + canvas + tip
+          legend: wrap?.querySelector("div:nth-child(2)") || null,
           tip: wrap?.querySelector("div:last-child") || null,
         };
       };
@@ -613,6 +1216,11 @@
       ratioBlock = getBlock("#owChartRatio");
     }
   }
+
+  const chartController =
+    visCard && chartsArea && incomeBlock && durationBlock && ratioBlock
+      ? createChartController({ visCard, chartsArea, incomeBlock, durationBlock, ratioBlock })
+      : null;
 
   function setStatus(msg) {
     statusBox.value = msg;
@@ -668,7 +1276,6 @@
 
     const incomeByDateProject = new Map();
     const durationByDateProject = new Map();
-    const ratioByDateProject = new Map();
 
     const dateSet = new Set();
 
@@ -695,17 +1302,6 @@
       durationByDateProject.get(date).set(project, (durationByDateProject.get(date).get(project) || 0) + duration);
     }
 
-    // ratio = income/duration per date/project
-    for (const date of incomeByDateProject.keys()) {
-      const im = incomeByDateProject.get(date) || new Map();
-      const dm = durationByDateProject.get(date) || new Map();
-      const rm = new Map();
-
-      const projects = new Set([...im.keys(), ...dm.keys()]);
-      for (const p of projects) rm.set(p, safeDiv(im.get(p) || 0, dm.get(p) || 0));
-      ratioByDateProject.set(date, rm);
-    }
-
     const overallRatio = safeDiv(totalIncome, totalDuration);
 
     const projArr = Array.from(projMap.entries()).map(([name, v]) => ({
@@ -719,7 +1315,6 @@
     const durationByProject = [...projArr].sort((a, b) => b.duration - a.duration);
     const ratioByProject = [...projArr].sort((a, b) => b.ratio - a.ratio);
 
-    // Quick stats UI injection (no new section)
     if (statsPanel) {
       clearNode(statsPanel);
 
@@ -728,7 +1323,7 @@
           { k: "Row count", v: formatInt(rowCount) },
           { k: "Time (hours)", v: formatNumber(totalDuration, 2) },
           { k: `Income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
-          { k: "Avg. rate", v: formatNumber(overallRatio, 2) },
+          { k: "Average rate", v: formatNumber(overallRatio, 2) },
         ])
       );
 
@@ -743,7 +1338,7 @@
         makeMiniTable(
           `Income`,
           incomeByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.income, 2) })),
-          { col1: "Project", col2: `(${incomeLabel})` }
+          { col1: "Project", col2: `${incomeLabel}` }
         )
       );
 
@@ -759,35 +1354,31 @@
         makeMiniTable(
           `Hourly rate`,
           ratioByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.ratio, 2) })),
-          { col1: "Project", col2: `(${incomeLabel}/h)` }
+          { col1: "Project", col2: `${incomeLabel}/h` }
         )
       );
 
       statsPanel.appendChild(grid);
     }
 
-    // Charts: show top N projects (readable)
     const maxProjects = 6;
     const topProjects = incomeByProject.slice(0, maxProjects).map((x) => x.name);
     const legendMore = Math.max(0, projArr.length - topProjects.length);
 
     const dates = sortIsoDates(dateSet);
+    const { min: minDate, max: maxDate } = getMinMaxDates(dates);
 
-    drawStackedBars(incomeBlock?.canvas, incomeBlock?.legend, incomeBlock?.tip, dates, topProjects, incomeByDateProject, {
-      legendMore,
-    });
-    drawStackedBars(
-      durationBlock?.canvas,
-      durationBlock?.legend,
-      durationBlock?.tip,
-      dates,
-      topProjects,
-      durationByDateProject,
-      { legendMore }
-    );
-    drawStackedBars(ratioBlock?.canvas, ratioBlock?.legend, ratioBlock?.tip, dates, topProjects, ratioByDateProject, {
-      legendMore,
-    });
+    if (chartController) {
+      chartController.setData({
+        dates,
+        topProjects,
+        legendMore,
+        incomeByDateProject,
+        durationByDateProject,
+        minDate,
+        maxDate,
+      });
+    }
   }
 
   async function runMerge() {
