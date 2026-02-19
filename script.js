@@ -1564,6 +1564,12 @@
 
   const API_BASE = "https://autoweave-backend.onrender.com";
 
+  // URL params (used by verify/reset deep links)
+  const __owUrl = new URL(window.location.href);
+  const mode = (__owUrl.searchParams.get("mode") || "").toLowerCase();
+  const deepEmail = (__owUrl.searchParams.get("email") || "").trim();
+  const deepToken = (__owUrl.searchParams.get("token") || "").trim();
+
   // Auth bar (Login / Register / Forgot password)
   const _owAuthBar = ensureAuthBar();
 
