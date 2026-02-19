@@ -1355,6 +1355,15 @@
       action.style.height = "42px";
       action.style.width = "100%";
       action.style.justifyContent = "center";
+const resend = document.createElement("button");
+      resend.type = "button";
+      stylePillButton(resend);
+      resend.style.height = "42px";
+      resend.style.width = "100%";
+      resend.style.justifyContent = "center";
+      resend.style.marginTop = "10px";
+      resend.textContent = "Resend verification link";
+      resend.style.display = "none";
 
       if (mode === "login") {
         title.textContent = "Login";
@@ -1366,8 +1375,9 @@
         msg.textContent = "We’ll email you a verification link.";
       } else if (mode === "forgot") {
         title.textContent = "Forgot password";
-        action.textContent = "Send reset link";
-        msg.textContent = "We’ll email you a reset link if the account exists.";
+        action.textContent = "Forgot password";
+        msg.textContent = "Choose an action below.";
+        resend.style.display = "inline-flex";
       } else if (mode === "reset") {
         title.textContent = "Reset password";
         action.textContent = "Set new password";
@@ -1392,6 +1402,7 @@
         body.appendChild(password);
         body.appendChild(password2);
         body.appendChild(action);
+        if (mode === "forgot") body.appendChild(resend);
       }
 
       action.addEventListener("click", async () => {
@@ -1465,13 +1476,39 @@
             }, 650);
           }
         } catch (e) {
-          msg.textContent = e?.message ? String(e.message) : String(e);
+          const emsg = e?.message ? String(e.message) : String(e);
+          msg.textContent = emsg;
+
+          // If the backend says email is unverified, offer resend link
+          if (mode === "login" && /verify|verification/i.test(emsg)) {
+            resend.style.display = "inline-flex";
+          }
         } finally {
           action.disabled = false;
           action.style.opacity = "1";
         }
       });
     }
+
+      resend.addEventListener("click", async () => {
+        const em = email.value.trim();
+        if (!em) {
+          msg.textContent = "Please enter your email.";
+          return;
+        }
+        try {
+          resend.disabled = true;
+          resend.style.opacity = "0.7";
+          await authResendVerify(em);
+          msg.textContent = "Verification email sent (if the account exists).";
+        } catch (e) {
+          msg.textContent = e?.message ? String(e.message) : String(e);
+        } finally {
+          resend.disabled = false;
+          resend.style.opacity = "1";
+        }
+      });
+
 
       // Auto-run verification when opened from a link
       if (mode === "verify" && opts.token && opts.email) {
@@ -1550,6 +1587,9 @@
   }
   async function authForgot(email) {
     return authJson("/api/v1/auth/forgot", { email });
+  }
+  async function authResendVerify(email) {
+    return authJson("/api/v1/auth/resend-verify", { email });
   }
   async function authVerify(email, token) {
     return authJson("/api/v1/auth/verify", { email, token });
