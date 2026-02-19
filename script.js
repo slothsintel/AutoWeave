@@ -6,606 +6,235 @@
 //   with AutoTrac Pro-style controls:
 //   - pill buttons for range + grouping
 //   - custom range date picker
-//   - smooth fade on redraw
-//   - cumulative mode toggle
-//   - export PNG (all charts combined)
 
-(() => {
-  // -----------------------------
-  // Guided example: local preview
-  // -----------------------------
-  const fileInput = document.getElementById("guidedFileInput");
-  const preview = document.getElementById("guidedPreview");
-  const clearBtn = document.getElementById("guidedClearBtn");
+(function () {
+  // =========================================================
+  // 0) Config
+  // =========================================================
+  const API_BASE = (() => {
+    // Prefer explicit global, then meta tag, then same-origin.
+    // You can set window.AUTOWEAVE_API_BASE = "https://your-backend"
+    if (typeof window !== "undefined" && window.AUTOWEAVE_API_BASE) return String(window.AUTOWEAVE_API_BASE).replace(/\/+$/, "");
+    const meta = document.querySelector('meta[name="autoweave-api-base"]');
+    if (meta && meta.content) return String(meta.content).replace(/\/+$/, "");
+    return "";
+  })();
 
-  if (fileInput && preview && clearBtn) {
-    function reset() {
-      fileInput.value = "";
-      preview.value = "";
+  const AUTH_STORAGE_KEY = "ow_auth_token";
+  const AUTH_EMAIL_KEY = "ow_auth_email";
+
+  // =========================================================
+  // 1) Utilities
+  // =========================================================
+  function $(sel, root = document) {
+    return root.querySelector(sel);
+  }
+  function $all(sel, root = document) {
+    return Array.from(root.querySelectorAll(sel));
+  }
+
+  function safeJsonParse(str, fallback = null) {
+    try {
+      return JSON.parse(str);
+    } catch (e) {
+      return fallback;
     }
-
-    clearBtn.addEventListener("click", reset);
-
-    fileInput.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      const text = await file.text();
-      const lines = text.split(/\r?\n/);
-      preview.value = lines.slice(0, 30).join("\n").slice(0, 4000);
-    });
-  }
-})();
-
-(() => {
-  // ---------------------------------
-  // Helpers: CSV parsing + math
-  // ---------------------------------
-
-  function parseCsvLine(line) {
-    const out = [];
-    let cur = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-
-      if (ch === '"') {
-        const next = line[i + 1];
-        if (inQuotes && next === '"') {
-          cur += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-        continue;
-      }
-
-      if (ch === "," && !inQuotes) {
-        out.push(cur);
-        cur = "";
-        continue;
-      }
-
-      cur += ch;
-    }
-    out.push(cur);
-    return out;
   }
 
-  function parseCsv(text) {
-    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-    if (lines.length === 0) return { header: [], rows: [] };
-
-    const header = parseCsvLine(lines[0]).map((h) => h.trim());
-    const rows = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const cols = parseCsvLine(lines[i]);
-      const row = {};
-      for (let j = 0; j < header.length; j++) {
-        row[header[j]] = (cols[j] ?? "").trim();
-      }
-      rows.push(row);
-    }
-
-    return { header, rows };
+  function fmtMoney(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "0";
+    // Keep compact and readable
+    return x.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
-  function toNumber(x) {
-    if (x == null) return 0;
-    const s = String(x).trim();
-    if (!s) return 0;
-    const n = Number(s);
-    return Number.isFinite(n) ? n : 0;
+  function fmtHours(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "0";
+    return x.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
-  function safeDiv(a, b) {
-    if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return 0;
-    return a / b;
+  function fmtRatio(n) {
+    const x = Number(n);
+    if (!Number.isFinite(x)) return "0";
+    return x.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
-  function formatNumber(n, digits = 2) {
-    const nf = new Intl.NumberFormat(undefined, {
-      maximumFractionDigits: digits,
-      minimumFractionDigits: digits,
-    });
-    return nf.format(Number.isFinite(n) ? n : 0);
+  function clamp(n, lo, hi) {
+    return Math.max(lo, Math.min(hi, n));
   }
 
-  function formatInt(n) {
-    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Number.isFinite(n) ? n : 0);
+  function isoDate(d) {
+    // yyyy-mm-dd
+    const dt = (d instanceof Date) ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return "";
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const day = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
 
-  function sortIsoDates(dates) {
-    return [...dates].sort((a, b) => String(a).localeCompare(String(b)));
-  }
-
-  function clamp(n, a, b) {
-    return Math.max(a, Math.min(b, n));
-  }
-
-  // Income metric selector: prefer amount_gbp if any non-empty amount_gbp exists
-  function chooseIncomeAccessor(rows) {
-    const anyGbp = rows.some((r) => (r.amount_gbp ?? "").toString().trim() !== "");
-    return {
-      label: anyGbp ? "amount_gbp" : "amount",
-      get: (r) => toNumber(anyGbp ? r.amount_gbp : r.amount),
-    };
-  }
-
-  // ---------------------------------
-  // Helpers: Dates + grouping
-  // ---------------------------------
-
-  function toDateObj(str) {
-    const s = String(str || "").trim();
+  function parseDateish(s) {
     if (!s) return null;
-    const d = new Date(s);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
-
-  function isoWeekKey(date) {
-    // ISO week year + week number
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const day = d.getUTCDay() || 7; // 1..7 (Mon..Sun)
-    d.setUTCDate(d.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
-    const y = d.getUTCFullYear();
-    return `${y}-W${String(weekNo).padStart(2, "0")}`;
-  }
-
-  function formatGroupKey(date, mode) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const dd = String(date.getDate()).padStart(2, "0");
-
-    if (mode === "day") return `${y}-${m}-${dd}`;
-    if (mode === "month") return `${y}-${m}`;
-    if (mode === "year") return `${y}`;
-    if (mode === "week") return isoWeekKey(date);
-
-    return `${y}-${m}-${dd}`;
-  }
-
-  function dateToISO(dateObj) {
-    const y = dateObj.getFullYear();
-    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const d = String(dateObj.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  function getMinMaxDates(isoDates) {
-    const parsed = isoDates.map(toDateObj).filter(Boolean);
-    if (!parsed.length) return { min: null, max: null };
-    parsed.sort((a, b) => a - b);
-    return { min: parsed[0], max: parsed[parsed.length - 1] };
-  }
-
-  // ---------------------------------
-  // Helpers: DOM injection (no tech.html changes)
-  // ---------------------------------
-
-  function ensureStatsPanel(statsTextarea) {
-    const formRow = statsTextarea.closest(".form-row") || statsTextarea.parentElement;
-    if (!formRow) return null;
-
-    const existing = formRow.querySelector("#owStatsPanel");
-    if (existing) return existing;
-
-    const panel = document.createElement("div");
-    panel.id = "owStatsPanel";
-    panel.style.display = "grid";
-    panel.style.gap = "0.85rem";
-    panel.style.marginBottom = "0.85rem";
-
-    formRow.insertBefore(panel, statsTextarea);
-    return panel;
-  }
-
-  function clearNode(node) {
-    if (!node) return;
-    while (node.firstChild) node.removeChild(node.firstChild);
-  }
-
-  function makeSummaryGrid(items) {
-    const wrap = document.createElement("div");
-    wrap.style.display = "grid";
-    wrap.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
-    wrap.style.gap = "0.75rem";
-
-    for (const it of items) {
-      const box = document.createElement("div");
-      box.style.border = "1px solid rgba(15,31,23,0.10)";
-      box.style.background = "rgba(255,255,255,0.92)";
-      box.style.borderRadius = "14px";
-      box.style.padding = "0.6rem 0.75rem";
-
-      const k = document.createElement("div");
-      k.textContent = it.k;
-      k.style.fontSize = "0.75rem";
-      k.style.letterSpacing = "0.03em";
-      k.style.textTransform = "uppercase";
-      k.style.opacity = "0.7";
-
-      const v = document.createElement("div");
-      v.textContent = it.v;
-      v.style.marginTop = "0.25rem";
-      v.style.fontSize = "1.05rem";
-      v.style.fontWeight = "700";
-      v.style.fontVariantNumeric = "tabular-nums";
-
-      box.appendChild(k);
-      box.appendChild(v);
-      wrap.appendChild(box);
+    const dt = new Date(s);
+    if (!Number.isNaN(dt.getTime())) return dt;
+    // try dd/mm/yyyy
+    const m = String(s).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) {
+      const dd = Number(m[1]);
+      const mm = Number(m[2]);
+      const yy = Number(m[3]);
+      const d2 = new Date(yy, mm - 1, dd);
+      if (!Number.isNaN(d2.getTime())) return d2;
     }
-    return wrap;
+    return null;
   }
 
-  function makeMiniTable(title, rows, { col1 = "Project", col2 = "Value" } = {}) {
-    const wrap = document.createElement("div");
-    wrap.style.border = "1px solid rgba(15,31,23,0.10)";
-    wrap.style.background = "rgba(255,255,255,0.92)";
-    wrap.style.borderRadius = "14px";
-    wrap.style.padding = "0.75rem";
-
-    const h = document.createElement("div");
-    h.textContent = title;
-    h.style.fontWeight = "700";
-    h.style.marginBottom = "0.5rem";
-    wrap.appendChild(h);
-
-    const table = document.createElement("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "collapse";
-    table.style.fontSize = "0.9rem";
-
-    const thead = document.createElement("thead");
-    const trh = document.createElement("tr");
-
-    const th1 = document.createElement("th");
-    th1.textContent = col1;
-    th1.style.textAlign = "left";
-    th1.style.padding = "0.35rem 0";
-    th1.style.opacity = "0.7";
-
-    const th2 = document.createElement("th");
-    th2.textContent = col2;
-    th2.style.textAlign = "right";
-    th2.style.padding = "0.35rem 0";
-    th2.style.opacity = "0.7";
-
-    trh.appendChild(th1);
-    trh.appendChild(th2);
-    thead.appendChild(trh);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-
-    rows.forEach((r, idx) => {
-      const tr = document.createElement("tr");
-      if (idx > 0) tr.style.borderTop = "1px solid rgba(15,31,23,0.08)";
-
-      const td1 = document.createElement("td");
-      td1.textContent = r.name;
-      td1.style.padding = "0.35rem 0";
-      td1.style.maxWidth = "280px";
-      td1.style.overflow = "hidden";
-      td1.style.textOverflow = "ellipsis";
-      td1.style.whiteSpace = "nowrap";
-
-      const td2 = document.createElement("td");
-      td2.textContent = r.value;
-      td2.style.padding = "0.35rem 0";
-      td2.style.textAlign = "right";
-      td2.style.fontVariantNumeric = "tabular-nums";
-
-      tr.appendChild(td1);
-      tr.appendChild(td2);
-      tbody.appendChild(tr);
-    });
-
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-    return wrap;
+  function sum(arr) {
+    let t = 0;
+    for (const x of arr) t += Number(x) || 0;
+    return t;
   }
 
-  function findVisualisationsCard() {
-    const headings = Array.from(document.querySelectorAll(".aw-card .aw-card__title"));
-    const h = headings.find((x) => (x.textContent || "").trim().toLowerCase() === "visualisations");
-    if (!h) return null;
-    return h.closest(".aw-card");
-  }
-
-  function ensureChartsArea(visCard) {
-    if (!visCard) return null;
-
-    const existing = visCard.querySelector("#owChartsArea");
-    if (existing) return existing;
-
-    const area = document.createElement("div");
-    area.id = "owChartsArea";
-    area.style.display = "grid";
-    area.style.gap = "0.9rem";
-    area.style.marginTop = "0.6rem";
-
-    const diagram = visCard.querySelector(".hybrid-diagram");
-    if (diagram && diagram.parentElement) diagram.parentElement.appendChild(area);
-    else visCard.appendChild(area);
-
-    return area;
-  }
-
-  // ---------------------------------
-  // Visualisation Controls (AutoTrac Pro-ish)
-  // ---------------------------------
-
-  function stylePillButton(btn) {
-    btn.type = "button";
-    btn.style.height = "36px";
-    btn.style.padding = "0 12px";
-    btn.style.borderRadius = "9999px";
-    btn.style.border = "1px solid rgba(15,31,23,0.14)";
-    btn.style.background = "rgba(255,255,255,0.92)";
-    btn.style.color = "rgba(15,31,23,0.74)";
-    btn.style.fontSize = "12px";
-    btn.style.fontWeight = "750";
-    btn.style.letterSpacing = "0.03em";
-    btn.style.textTransform = "uppercase";
-    btn.style.cursor = "pointer";
-    btn.style.userSelect = "none";
-    btn.style.boxShadow = "0 8px 18px rgba(0,0,0,0.06)";
-    btn.style.transition = "transform 120ms ease, background 160ms ease, border-color 160ms ease, opacity 160ms ease";
-    btn.addEventListener("mouseenter", () => {
-      btn.style.transform = "translateY(-1px)";
-      btn.style.borderColor = "rgba(15,31,23,0.22)";
-    });
-    btn.addEventListener("mouseleave", () => {
-      btn.style.transform = "translateY(0)";
-      btn.style.borderColor = "rgba(15,31,23,0.14)";
-    });
-  }
-
-  function setPillActive(btn, isActive) {
-    if (!btn) return;
-    if (isActive) {
-      btn.dataset.active = "1";
-      btn.style.background = "rgba(15,31,23,0.92)";
-      btn.style.color = "rgba(255,255,255,0.92)";
-      btn.style.borderColor = "rgba(15,31,23,0.92)";
-      btn.style.boxShadow = "0 12px 26px rgba(0,0,0,0.16)";
-    } else {
-      btn.dataset.active = "0";
-      btn.style.background = "rgba(255,255,255,0.92)";
-      btn.style.color = "rgba(15,31,23,0.74)";
-      btn.style.borderColor = "rgba(15,31,23,0.14)";
-      btn.style.boxShadow = "0 8px 18px rgba(0,0,0,0.06)";
+  function groupBy(arr, keyFn) {
+    const m = new Map();
+    for (const item of arr) {
+      const k = keyFn(item);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(item);
     }
+    return m;
   }
 
-  function makePillGroup(labelText) {
-    const wrap = document.createElement("div");
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.gap = "0.25rem";
-
-    const label = document.createElement("div");
-    label.textContent = labelText;
-    label.style.fontSize = "0.75rem";
-    label.style.letterSpacing = "0.03em";
-    label.style.textTransform = "uppercase";
-    label.style.opacity = "0.65";
-
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.gap = "0.5rem";
-    row.style.flexWrap = "wrap";
-
-    wrap.appendChild(label);
-    wrap.appendChild(row);
-
-    return { wrap, row };
+  function uniq(arr) {
+    return Array.from(new Set(arr));
   }
 
-  function ensureChartControls(visCard, chartsArea) {
-    if (!visCard || !chartsArea) return null;
-
-    const existing = visCard.querySelector("#owChartControls");
-    if (existing) return existing.__owApi || null;
-
-    const bar = document.createElement("div");
-    bar.id = "owChartControls";
-    bar.style.display = "flex";
-    bar.style.flexWrap = "wrap";
-    bar.style.gap = "0.9rem";
-    bar.style.alignItems = "flex-end";
-    bar.style.padding = "0.75rem";
-    bar.style.borderRadius = "14px";
-    bar.style.border = "1px solid rgba(15,31,23,0.10)";
-    bar.style.background = "rgba(255,255,255,0.70)";
-    bar.style.boxShadow = "0 12px 24px rgba(0,0,0,0.06)";
-    bar.style.marginTop = "0.4rem";
-    bar.style.marginBottom = "0.65rem";
-
-    // Range group
-    const range = makePillGroup("Date range");
-    const rangeBtns = new Map();
-
-    const ranges = [
-      { id: "14", label: "Last 14 days" },
-      { id: "30", label: "Last 30" },
-      { id: "90", label: "Last 90" },
-      { id: "all", label: "All time" },
-      { id: "custom", label: "Custom" },
-    ];
-
-    ranges.forEach((r) => {
-      const b = document.createElement("button");
-      b.textContent = r.label;
-      b.dataset.value = r.id;
-      stylePillButton(b);
-      range.row.appendChild(b);
-      rangeBtns.set(r.id, b);
-    });
-
-    // Custom range pickers
-    const customWrap = document.createElement("div");
-    customWrap.style.display = "none";
-    customWrap.style.gap = "0.6rem";
-    customWrap.style.alignItems = "center";
-    customWrap.style.flexWrap = "wrap";
-    customWrap.style.marginTop = "0.35rem";
-
-    const from = document.createElement("input");
-    from.type = "date";
-    from.id = "owCustomFrom";
-    from.style.height = "36px";
-    from.style.borderRadius = "10px";
-    from.style.border = "1px solid rgba(15,31,23,0.14)";
-    from.style.padding = "0 10px";
-    from.style.background = "rgba(255,255,255,0.92)";
-
-    const to = document.createElement("input");
-    to.type = "date";
-    to.id = "owCustomTo";
-    to.style.height = "36px";
-    to.style.borderRadius = "10px";
-    to.style.border = "1px solid rgba(15,31,23,0.14)";
-    to.style.padding = "0 10px";
-    to.style.background = "rgba(255,255,255,0.92)";
-
-    const apply = document.createElement("button");
-    apply.textContent = "Apply";
-    stylePillButton(apply);
-
-    customWrap.appendChild(from);
-    customWrap.appendChild(to);
-    customWrap.appendChild(apply);
-    range.wrap.appendChild(customWrap);
-
-    // Grouping group
-    const group = makePillGroup("Group");
-    const groupBtns = new Map();
-
-    const groups = [
-      { id: "day", label: "Day" },
-      { id: "week", label: "Week" },
-      { id: "month", label: "Month" },
-      { id: "year", label: "Year" },
-    ];
-
-    groups.forEach((g) => {
-      const b = document.createElement("button");
-      b.textContent = g.label;
-      b.dataset.value = g.id;
-      stylePillButton(b);
-      group.row.appendChild(b);
-      groupBtns.set(g.id, b);
-    });
-
-    // Toggles group
-    const toggles = makePillGroup("Mode");
-    const cumulativeBtn = document.createElement("button");
-    cumulativeBtn.textContent = "Cumulative";
-    stylePillButton(cumulativeBtn);
-
-    toggles.row.appendChild(cumulativeBtn);
-
-    // Export group
-    const exportG = makePillGroup("Export");
-    const exportBtn = document.createElement("button");
-    exportBtn.textContent = "Export PNG";
-    stylePillButton(exportBtn);
-    exportG.row.appendChild(exportBtn);
-
-    bar.appendChild(range.wrap);
-    bar.appendChild(group.wrap);
-    bar.appendChild(toggles.wrap);
-    bar.appendChild(exportG.wrap);
-
-    visCard.insertBefore(bar, chartsArea);
-
-    const api = {
-      el: bar,
-      rangeBtns,
-      groupBtns,
-      customWrap,
-      customFrom: from,
-      customTo: to,
-      customApply: apply,
-      cumulativeBtn,
-      exportBtn,
-      setCustomVisible: (v) => (customWrap.style.display = v ? "flex" : "none"),
+  function debounce(fn, ms = 200) {
+    let t = null;
+    return (...args) => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
     };
-
-    bar.__owApi = api;
-    return api;
   }
 
-  // ---------------------------------
-  // Canvas blocks
-  // ---------------------------------
-
-  function makeCanvasBlock(title) {
-    const wrap = document.createElement("div");
-    wrap.style.border = "1px solid rgba(15,31,23,0.10)";
-    wrap.style.background = "rgba(255,255,255,0.92)";
-    wrap.style.borderRadius = "14px";
-    wrap.style.padding = "0.75rem";
-    wrap.style.position = "relative";
-    wrap.style.transition = "opacity 180ms ease"; // fade on redraw
-
-    const h = document.createElement("div");
-    h.textContent = title;
-    h.style.fontWeight = "800";
-    h.style.marginBottom = "0.35rem";
-    wrap.appendChild(h);
-
-    // Legend container (chips)
-    const legend = document.createElement("div");
-    legend.style.display = "flex";
-    legend.style.flexWrap = "wrap";
-    legend.style.gap = "0.5rem 0.8rem";
-    legend.style.alignItems = "center";
-    legend.style.marginBottom = "0.55rem";
-    legend.style.opacity = "0.85";
-    wrap.appendChild(legend);
-
-    const canvas = document.createElement("canvas");
-    canvas.style.width = "100%";
-    canvas.style.height = "220px";
-    canvas.height = 220;
-    canvas.style.display = "block";
-    canvas.style.borderRadius = "10px";
-    wrap.appendChild(canvas);
-
-    // Tooltip (floating)
-    const tip = document.createElement("div");
-    tip.style.position = "absolute";
-    tip.style.pointerEvents = "none";
-    tip.style.display = "none";
-    tip.style.zIndex = "5";
-    tip.style.minWidth = "180px";
-    tip.style.maxWidth = "260px";
-    tip.style.padding = "10px 12px";
-    tip.style.borderRadius = "12px";
-    tip.style.border = "1px solid rgba(15,31,23,0.18)";
-    tip.style.background = "rgba(10,18,14,0.92)";
-    tip.style.color = "rgba(255,255,255,0.92)";
-    tip.style.boxShadow = "0 10px 30px rgba(0,0,0,0.22)";
-    tip.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-    tip.style.fontSize = "12px";
-    tip.style.lineHeight = "1.25";
-    wrap.appendChild(tip);
-
-    return { wrap, canvas, legend, tip };
+  // =========================================================
+  // 2) Auth helpers
+  // =========================================================
+  function getAuthToken() {
+    try {
+      return localStorage.getItem(AUTH_STORAGE_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+  function getAuthEmail() {
+    try {
+      return localStorage.getItem(AUTH_EMAIL_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+  function setAuthToken(token, email) {
+    try {
+      if (token) localStorage.setItem(AUTH_STORAGE_KEY, token);
+      else localStorage.removeItem(AUTH_STORAGE_KEY);
+      if (email) localStorage.setItem(AUTH_EMAIL_KEY, email);
+    } catch (e) {}
+  }
+  function clearAuthToken() {
+    setAuthToken("", "");
   }
 
-  // ---------------------------------
-  // Colors (your palette)
-  // ---------------------------------
+  function apiUrl(path) {
+    const p = String(path || "");
+    if (!API_BASE) return p.startsWith("/") ? p : `/${p}`;
+    return `${API_BASE}${p.startsWith("/") ? "" : "/"}${p}`;
+  }
 
+  async function apiFetch(path, options = {}) {
+    const token = getAuthToken();
+    const headers = new Headers(options.headers || {});
+    if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch(apiUrl(path), {
+      ...options,
+      headers,
+    });
+
+    if (!res.ok) {
+      let msg = `${res.status} ${res.statusText}`;
+      try {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          const j = await res.json();
+          msg = j?.detail || j?.message || msg;
+        } else {
+          const t = await res.text();
+          if (t) msg = t;
+        }
+      } catch (e) {}
+      const err = new Error(String(msg));
+      err.status = res.status;
+      throw err;
+    }
+    return res;
+  }
+
+  async function authRegister(email, password) {
+    const res = await apiFetch("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function authLogin(email, password) {
+    const res = await apiFetch("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function authForgot(email) {
+    const res = await apiFetch("/api/v1/auth/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  }
+
+  async function authReset(email, token, new_password) {
+    const res = await apiFetch("/api/v1/auth/reset", {
+      method: "POST",
+      body: JSON.stringify({ email, token, new_password }),
+    });
+    return res.json();
+  }
+
+  async function authVerify(email, token) {
+    const res = await apiFetch("/api/v1/auth/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, token }),
+    });
+    return res.json();
+  }
+
+  async function authResendVerify(email) {
+    const res = await apiFetch("/api/v1/auth/resend-verify", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  }
+
+  // =========================================================
+  // 3) Visualisation helpers (lightweight stacked bars)
+  // =========================================================
   const PROJECT_COLORS = [
     "#ff0000",
     "#ff6003",
@@ -621,569 +250,257 @@
     "#83ff83",
   ];
 
-  function colorForProject(name) {
-    const s = String(name || "");
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    return PROJECT_COLORS[h % PROJECT_COLORS.length];
+  function colorForProject(name, projectNames) {
+    const idx = projectNames.indexOf(name);
+    return PROJECT_COLORS[idx % PROJECT_COLORS.length];
   }
 
-  // ---------------------------------
-  // Charts: stacked bars with legend + tooltip
-  // ---------------------------------
+  function createEl(tag, props = {}, children = []) {
+    const el = document.createElement(tag);
+    Object.assign(el, props);
+    for (const c of children) {
+      if (typeof c === "string") el.appendChild(document.createTextNode(c));
+      else if (c) el.appendChild(c);
+    }
+    return el;
+  }
 
-  function setLegendChips(legendEl, projects, moreCount) {
-    if (!legendEl) return;
-    legendEl.innerHTML = "";
+  function stylePillButton(btn) {
+    btn.className = "aw-pill";
+    btn.style.display = "inline-flex";
+    btn.style.alignItems = "center";
+    btn.style.gap = "0.45rem";
+    btn.style.padding = "0 12px";
+    btn.style.height = "36px";
+    btn.style.borderRadius = "9999px";
+    btn.style.border = "1px solid rgba(15,31,23,0.14)";
+    btn.style.background = "rgba(255,255,255,0.92)";
+    btn.style.color = "rgba(15,31,23,0.86)";
+    btn.style.fontWeight = "700";
+    btn.style.letterSpacing = "0.02em";
+    btn.style.textTransform = "uppercase";
+    btn.style.cursor = "pointer";
+    btn.style.userSelect = "none";
+  }
 
-    projects.forEach((p) => {
-      const chip = document.createElement("div");
-      chip.style.display = "inline-flex";
-      chip.style.alignItems = "center";
-      chip.style.gap = "0.4rem";
-      chip.style.fontSize = "12px";
-      chip.style.color = "rgba(15,31,23,0.72)";
-
-      const dot = document.createElement("span");
-      dot.style.width = "10px";
-      dot.style.height = "10px";
-      dot.style.borderRadius = "999px";
-      dot.style.display = "inline-block";
-      dot.style.background = colorForProject(p);
-      dot.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.8)";
-
-      const label = document.createElement("span");
-      label.textContent = p;
-
-      chip.appendChild(dot);
-      chip.appendChild(label);
-      legendEl.appendChild(chip);
-    });
-
-    if (moreCount > 0) {
-      const more = document.createElement("span");
-      more.textContent = `+${moreCount} more`;
-      more.style.fontSize = "12px";
-      more.style.opacity = "0.6";
-      legendEl.appendChild(more);
+  function setPillActive(btn, active) {
+    if (active) {
+      btn.style.background = "rgba(15,31,23,0.92)";
+      btn.style.color = "white";
+      btn.style.borderColor = "rgba(15,31,23,0.92)";
+    } else {
+      btn.style.background = "rgba(255,255,255,0.92)";
+      btn.style.color = "rgba(15,31,23,0.86)";
+      btn.style.borderColor = "rgba(15,31,23,0.14)";
     }
   }
 
-  function drawStackedBars(canvas, legendEl, tipEl, dates, seriesOrder, valuesByDateProject, opts) {
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+  function clearEl(el) {
+    while (el && el.firstChild) el.removeChild(el.firstChild);
+  }
 
-    const cssW = canvas.clientWidth || 800;
-    const cssH = canvas.clientHeight || 220;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, cssW, cssH);
+  // A simple stacked bar chart renderer using divs (no external libs)
+  function renderStackedBars(container, data, projectNames, valueKey, title) {
+    // data: [{ key: "2026-01-01", values: {ProjectA: 10, ProjectB: 3}, total: 13 }, ...]
+    clearEl(container);
 
-    const hit = []; // {x,y,w,h,date,project,value}
-    const padding = { l: 10, r: 10, t: 8, b: 34 };
-    const w = cssW - padding.l - padding.r;
-    const h = cssH - padding.t - padding.b;
+    const header = createEl("div", { className: "aw-vis-header" }, [
+      createEl("div", { className: "aw-vis-title", textContent: title }),
+    ]);
 
-    setLegendChips(legendEl, seriesOrder, opts?.legendMore || 0);
+    container.appendChild(header);
 
-    if (!dates.length || !seriesOrder.length) {
-      ctx.font = "12px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(15,31,23,0.55)";
-      ctx.fillText("No chart data available.", padding.l, padding.t + 16);
-      canvas.__owHit = [];
-      canvas.__owValuesByDateProject = valuesByDateProject;
-      canvas.__owSeriesOrder = seriesOrder;
-      return;
-    }
+    const chart = createEl("div", { className: "aw-stacked-chart" });
+    chart.style.display = "grid";
+    chart.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
+    chart.style.gap = "8px";
+    chart.style.alignItems = "end";
+    chart.style.padding = "8px 2px 0 2px";
 
-    const totals = dates.map((d) => {
-      const perProj = valuesByDateProject.get(d) || new Map();
-      let sum = 0;
-      for (const p of seriesOrder) sum += (perProj.get(p) || 0);
-      return sum;
-    });
+    const maxTotal = Math.max(1, ...data.map(d => Number(d.total) || 0));
 
-    const maxTotal = Math.max(...totals, 0.000001);
-    const gap = 6;
-    const barW = Math.max(10, (w - gap * (dates.length - 1)) / dates.length);
+    for (const d of data) {
+      const col = createEl("div", { className: "aw-bar-col" });
+      col.style.display = "flex";
+      col.style.flexDirection = "column";
+      col.style.justifyContent = "flex-end";
+      col.style.gap = "6px";
 
-    // baseline
-    ctx.strokeStyle = "rgba(15,31,23,0.12)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padding.l, padding.t + h);
-    ctx.lineTo(padding.l + w, padding.t + h);
-    ctx.stroke();
+      const bar = createEl("div", { className: "aw-bar" });
+      bar.style.width = "100%";
+      bar.style.height = `${Math.round((Number(d.total) || 0) / maxTotal * 140)}px`;
+      bar.style.borderRadius = "12px";
+      bar.style.overflow = "hidden";
+      bar.style.display = "flex";
+      bar.style.flexDirection = "column-reverse";
+      bar.style.boxShadow = "0 10px 22px rgba(15,31,23,0.10)";
+      bar.style.border = "1px solid rgba(15,31,23,0.10)";
+      bar.title = `${d.key}\nTotal: ${fmtMoney(d.total)}`;
 
-    // x labels: show every Nth to avoid overlap
-    const maxLabels = 10;
-    const step = Math.max(1, Math.ceil(dates.length / maxLabels));
-
-    for (let i = 0; i < dates.length; i++) {
-      const date = dates[i];
-      const perProj = valuesByDateProject.get(date) || new Map();
-      const x = padding.l + i * (barW + gap);
-
-      let yCursor = padding.t + h;
-
-      for (let j = 0; j < seriesOrder.length; j++) {
-        const p = seriesOrder[j];
-        const v = perProj.get(p) || 0;
+      // stack segments
+      for (const p of projectNames) {
+        const v = Number(d.values?.[p]) || 0;
         if (v <= 0) continue;
-
-        const segH = (v / maxTotal) * h;
-        yCursor -= segH;
-
-        ctx.fillStyle = colorForProject(p);
-        ctx.fillRect(x, yCursor, barW, segH);
-
-        hit.push({ x, y: yCursor, w: barW, h: segH, date, project: p, value: v });
+        const seg = createEl("div", { className: "aw-bar-seg" });
+        const pct = (d.total > 0) ? (v / d.total) : 0;
+        seg.style.height = `${pct * 100}%`;
+        seg.style.background = colorForProject(p, projectNames);
+        seg.style.opacity = "0.85";
+        seg.title = `${p}: ${valueKey === "ratio" ? fmtRatio(v) : (valueKey === "hours" ? fmtHours(v) : fmtMoney(v))}`;
+        bar.appendChild(seg);
       }
 
-      if (i % step === 0 || i === dates.length - 1) {
-        const label = String(date || "");
-        let short = label;
-        if (/^\d{4}-\d{2}-\d{2}$/.test(label)) short = label.slice(5);
-        else if (/^\d{4}-W\d{2}$/.test(label)) short = label.slice(5);
-        ctx.font = "11px system-ui, sans-serif";
-        ctx.fillStyle = "rgba(15,31,23,0.60)";
-        ctx.textAlign = "center";
-        ctx.fillText(short, x + barW / 2, padding.t + h + 18);
-      }
+      const label = createEl("div", { className: "aw-bar-label", textContent: d.key });
+      label.style.fontSize = "0.8rem";
+      label.style.textAlign = "center";
+      label.style.color = "rgba(15,31,23,0.62)";
+      label.style.whiteSpace = "nowrap";
+      label.style.overflow = "hidden";
+      label.style.textOverflow = "ellipsis";
+
+      col.appendChild(bar);
+      col.appendChild(label);
+      chart.appendChild(col);
     }
 
-    // Store latest hit regions + data for handlers
-    canvas.__owHit = hit;
-    canvas.__owValuesByDateProject = valuesByDateProject;
-    canvas.__owSeriesOrder = seriesOrder;
-
-    // Hover tooltip (bind once per canvas)
-    if (!canvas.__owHoverBound) {
-      canvas.__owHoverBound = true;
-
-      canvas.addEventListener("mousemove", (ev) => {
-        if (!tipEl) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const mx = ev.clientX - rect.left;
-        const my = ev.clientY - rect.top;
-
-        const regions = canvas.__owHit || [];
-        const seg = regions.find((r) => mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h);
-        if (!seg) {
-          tipEl.style.display = "none";
-          return;
-        }
-
-        const valuesMap = canvas.__owValuesByDateProject || new Map();
-        const series = canvas.__owSeriesOrder || [];
-
-        const perProj = valuesMap.get(seg.date) || new Map();
-
-        const lines = series
-          .map((p) => ({ p, v: perProj.get(p) || 0 }))
-          .filter((x) => x.v > 0)
-          .sort((a, b) => b.v - a.v);
-
-        const title = `<div style="font-weight:800;font-size:13px;margin-bottom:6px;">${seg.date}</div>`;
-        const body = lines
-          .map(
-            (x) => `
-              <div style="display:flex;justify-content:space-between;gap:12px;margin:2px 0;">
-                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                  <span style="width:10px;height:10px;border-radius:999px;background:${colorForProject(x.p)};display:inline-block;"></span>
-                  <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${x.p}</span>
-                </div>
-                <div style="font-variant-numeric:tabular-nums;font-weight:700;">${formatNumber(x.v, 2)}</div>
-              </div>
-            `
-          )
-          .join("");
-
-        tipEl.innerHTML = title + body;
-
-        const parent = tipEl.parentElement?.getBoundingClientRect();
-        const tipW = 240;
-        const tipH = 140;
-
-        const px = clamp(mx + 14, 8, (parent ? parent.width : rect.width) - tipW - 8);
-        const py = clamp(my + 14, 8, (parent ? parent.height : rect.height) - tipH - 8);
-
-        tipEl.style.left = `${px}px`;
-        tipEl.style.top = `${py}px`;
-        tipEl.style.display = "block";
-      });
-
-      canvas.addEventListener("mouseleave", () => {
-        if (tipEl) tipEl.style.display = "none";
-      });
-    }
+    container.appendChild(chart);
   }
 
-  // ---------------------------------
-  // Chart controller (modular)
-  // ---------------------------------
+  // =========================================================
+  // 4) Parse merged CSV stats for visuals
+  // =========================================================
+  function parseCsv(text) {
+    // minimal CSV parser (handles quotes)
+    const rows = [];
+    let row = [];
+    let cur = "";
+    let inQ = false;
 
-  function createChartController({ visCard, chartsArea, incomeBlock, durationBlock, ratioBlock }) {
-    const controls = ensureChartControls(visCard, chartsArea);
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
 
-    const state = {
-      range: "14", // 14|30|90|all|custom
-      group: "day", // day|week|month|year
-      cumulative: false,
-      customFrom: "",
-      customTo: "",
-    };
-
-    const data = {
-      dates: [],
-      topProjects: [],
-      legendMore: 0,
-      incomeByDateProject: new Map(),
-      durationByDateProject: new Map(),
-      minDate: null,
-      maxDate: null,
-    };
-
-    function setRange(next) {
-      state.range = next;
-      for (const [k, b] of controls.rangeBtns.entries()) setPillActive(b, k === next);
-      controls.setCustomVisible(next === "custom");
-      requestRender();
-    }
-
-    function setGroup(next) {
-      state.group = next;
-      for (const [k, b] of controls.groupBtns.entries()) setPillActive(b, k === next);
-      requestRender();
-    }
-
-    function setCumulative(on) {
-      state.cumulative = !!on;
-      setPillActive(controls.cumulativeBtn, state.cumulative);
-      requestRender();
-    }
-
-    function setCustomRange(from, to) {
-      state.customFrom = from || "";
-      state.customTo = to || "";
-      controls.customFrom.value = state.customFrom;
-      controls.customTo.value = state.customTo;
-      requestRender();
-    }
-
-    function setData(next) {
-      data.dates = next.dates || [];
-      data.topProjects = next.topProjects || [];
-      data.legendMore = next.legendMore || 0;
-      data.incomeByDateProject = next.incomeByDateProject || new Map();
-      data.durationByDateProject = next.durationByDateProject || new Map();
-      data.minDate = next.minDate || null;
-      data.maxDate = next.maxDate || null;
-
-      if (data.minDate && data.maxDate) {
-        controls.customFrom.min = dateToISO(data.minDate);
-        controls.customFrom.max = dateToISO(data.maxDate);
-        controls.customTo.min = dateToISO(data.minDate);
-        controls.customTo.max = dateToISO(data.maxDate);
-
-        if (!state.customFrom) state.customFrom = dateToISO(data.minDate);
-        if (!state.customTo) state.customTo = dateToISO(data.maxDate);
-        controls.customFrom.value = state.customFrom;
-        controls.customTo.value = state.customTo;
-      }
-
-      requestRender();
-    }
-
-    function computeFilteredDates() {
-      const all = data.dates;
-      if (!all.length) return [];
-
-      const { max } = getMinMaxDates(all);
-      const anchor = max || new Date();
-
-      if (state.range === "all") return [...all];
-
-      if (state.range === "custom") {
-        const fromD = toDateObj(state.customFrom);
-        const toD = toDateObj(state.customTo);
-        if (!fromD || !toD) return [...all];
-        const fromT = new Date(fromD.getFullYear(), fromD.getMonth(), fromD.getDate()).getTime();
-        const toT = new Date(toD.getFullYear(), toD.getMonth(), toD.getDate()).getTime();
-        const lo = Math.min(fromT, toT);
-        const hi = Math.max(fromT, toT);
-        return all.filter((d) => {
-          const dt = toDateObj(d);
-          if (!dt) return false;
-          const t = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
-          return t >= lo && t <= hi;
-        });
-      }
-
-      const days = Number(state.range) || 14;
-      const cutoff = new Date(anchor);
-      cutoff.setDate(cutoff.getDate() - (days - 1));
-      const cutoffT = new Date(cutoff.getFullYear(), cutoff.getMonth(), cutoff.getDate()).getTime();
-
-      return all.filter((d) => {
-        const dt = toDateObj(d);
-        if (!dt) return false;
-        const t = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
-        return t >= cutoffT;
-      });
-    }
-
-    function regroup(sourceMap, filteredDates) {
-      const out = new Map();
-      for (const d of filteredDates) {
-        const dt = toDateObj(d);
-        if (!dt) continue;
-
-        const key = formatGroupKey(dt, state.group);
-        const perProj = sourceMap.get(d) || new Map();
-
-        if (!out.has(key)) out.set(key, new Map());
-        const dest = out.get(key);
-
-        for (const [p, v] of perProj.entries()) {
-          dest.set(p, (dest.get(p) || 0) + v);
+      if (inQ) {
+        if (ch === '"' && next === '"') {
+          cur += '"';
+          i++;
+        } else if (ch === '"') {
+          inQ = false;
+        } else {
+          cur += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQ = true;
+        } else if (ch === ",") {
+          row.push(cur);
+          cur = "";
+        } else if (ch === "\n") {
+          row.push(cur);
+          rows.push(row);
+          row = [];
+          cur = "";
+        } else if (ch === "\r") {
+          // ignore
+        } else {
+          cur += ch;
         }
       }
-      return out;
     }
+    if (cur.length > 0 || row.length > 0) {
+      row.push(cur);
+      rows.push(row);
+    }
+    return rows;
+  }
 
-    function applyCumulative(groupedMap, projects) {
-      const keys = sortIsoDates([...groupedMap.keys()]);
-      const running = new Map(projects.map((p) => [p, 0]));
-      const out = new Map();
-
-      for (const k of keys) {
-        const perProj = groupedMap.get(k) || new Map();
-        const cum = new Map();
-        for (const p of projects) {
-          const next = (running.get(p) || 0) + (perProj.get(p) || 0);
-          running.set(p, next);
-          cum.set(p, next);
-        }
-        out.set(k, cum);
+  function rowsToObjects(rows) {
+    if (!rows || rows.length === 0) return [];
+    const header = rows[0].map(h => String(h || "").trim());
+    const out = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const obj = {};
+      for (let j = 0; j < header.length; j++) {
+        obj[header[j]] = r[j] ?? "";
       }
-      return out;
+      out.push(obj);
     }
+    return out;
+  }
 
-    function applyCumulativeRate(incomeGrouped, durationGrouped, projects) {
-      const keys = sortIsoDates([...incomeGrouped.keys()]);
-      const runningIncome = new Map(projects.map((p) => [p, 0]));
-      const runningDur = new Map(projects.map((p) => [p, 0]));
-      const out = new Map();
+  function normalizeMergedRow(obj) {
+    // Try best-effort mapping based on expected backend output
+    // Typical columns: work_date, project, income, duration_hours
+    const project = String(obj.project || obj.Project || obj.PROJECT || "").trim();
+    const dateRaw = obj.work_date || obj.date || obj.workDate || obj.workDateISO || obj.workdate || "";
+    const d = parseDateish(dateRaw);
+    const work_date = d ? isoDate(d) : String(dateRaw || "").trim();
 
-      for (const k of keys) {
-        const im = incomeGrouped.get(k) || new Map();
-        const dm = durationGrouped.get(k) || new Map();
-        const rm = new Map();
+    const income = Number(obj.income ?? obj.Income ?? obj.amount ?? obj.Amount ?? 0) || 0;
+    const duration = Number(obj.duration_hours ?? obj.duration ?? obj.hours ?? obj.Hours ?? 0) || 0;
 
-        for (const p of projects) {
-          runningIncome.set(p, (runningIncome.get(p) || 0) + (im.get(p) || 0));
-          runningDur.set(p, (runningDur.get(p) || 0) + (dm.get(p) || 0));
-          rm.set(p, safeDiv(runningIncome.get(p) || 0, runningDur.get(p) || 0));
-        }
-        out.set(k, rm);
+    return { work_date, project, income, duration };
+  }
+
+  function buildDailyProjectSeries(objs, group = "day") {
+    // group: day|week|month
+    const rows = objs
+      .map(normalizeMergedRow)
+      .filter(r => r.project && r.work_date);
+
+    // define key based on grouping
+    function keyForDate(iso) {
+      const d = parseDateish(iso);
+      if (!d) return iso;
+      if (group === "month") {
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       }
-      return out;
-    }
-
-    let raf = 0;
-    function requestRender() {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(render);
-    }
-
-    function fadeBlocks(on) {
-      const blocks = [incomeBlock?.wrap, durationBlock?.wrap, ratioBlock?.wrap].filter(Boolean);
-      blocks.forEach((w) => (w.style.opacity = on ? "0.25" : "1"));
-    }
-
-    function render() {
-      raf = 0;
-      if (!data.dates.length || !data.topProjects.length) return;
-
-      fadeBlocks(true);
-
-      const filteredDates = computeFilteredDates();
-
-      const incomeGrouped = regroup(data.incomeByDateProject, filteredDates);
-      const durationGrouped = regroup(data.durationByDateProject, filteredDates);
-
-      const ratioGrouped = (() => {
-        const keys = new Set([...incomeGrouped.keys(), ...durationGrouped.keys()]);
-        const out = new Map();
-        for (const k of keys) {
-          const im = incomeGrouped.get(k) || new Map();
-          const dm = durationGrouped.get(k) || new Map();
-          const rm = new Map();
-          for (const p of data.topProjects) rm.set(p, safeDiv(im.get(p) || 0, dm.get(p) || 0));
-          out.set(k, rm);
-        }
-        return out;
-      })();
-
-      let incomeFinal = incomeGrouped;
-      let durationFinal = durationGrouped;
-      let ratioFinal = ratioGrouped;
-
-      if (state.cumulative) {
-        incomeFinal = applyCumulative(incomeGrouped, data.topProjects);
-        durationFinal = applyCumulative(durationGrouped, data.topProjects);
-        ratioFinal = applyCumulativeRate(incomeGrouped, durationGrouped, data.topProjects);
+      if (group === "week") {
+        // ISO week-ish: year-Www
+        // simple: start-of-week Monday
+        const dt = new Date(d);
+        const day = (dt.getDay() + 6) % 7; // Monday=0
+        dt.setDate(dt.getDate() - day);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, "0");
+        const dd = String(dt.getDate()).padStart(2, "0");
+        return `${y}-W${m}${dd}`; // stable key for display
       }
-
-      const groupedDates = sortIsoDates([...incomeFinal.keys()]);
-
-      setTimeout(() => {
-        drawStackedBars(
-          incomeBlock?.canvas,
-          incomeBlock?.legend,
-          incomeBlock?.tip,
-          groupedDates,
-          data.topProjects,
-          incomeFinal,
-          { legendMore: data.legendMore }
-        );
-        drawStackedBars(
-          durationBlock?.canvas,
-          durationBlock?.legend,
-          durationBlock?.tip,
-          groupedDates,
-          data.topProjects,
-          durationFinal,
-          { legendMore: data.legendMore }
-        );
-        drawStackedBars(
-          ratioBlock?.canvas,
-          ratioBlock?.legend,
-          ratioBlock?.tip,
-          groupedDates,
-          data.topProjects,
-          ratioFinal,
-          { legendMore: data.legendMore }
-        );
-        fadeBlocks(false);
-      }, 60);
+      return isoDate(d);
     }
 
-    function exportPng() {
-      const blocks = [
-        { title: "Income", canvas: incomeBlock?.canvas },
-        { title: "Duration", canvas: durationBlock?.canvas },
-        { title: "Rate", canvas: ratioBlock?.canvas },
-      ].filter((x) => x.canvas);
+    const projectNames = uniq(rows.map(r => r.project)).sort((a, b) => a.localeCompare(b));
 
-      if (!blocks.length) return;
-
-      const widths = blocks.map((b) => b.canvas.width);
-      const heights = blocks.map((b) => b.canvas.height);
-
-      const pad = 28;
-      const titleH = 34;
-
-      const outW = Math.max(...widths);
-      const outH =
-        pad + blocks.length * titleH + heights.reduce((a, b) => a + b, 0) + pad + (blocks.length - 1) * 18;
-
-      const out = document.createElement("canvas");
-      out.width = outW;
-      out.height = outH;
-      const ctx = out.getContext("2d");
-      if (!ctx) return;
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, outW, outH);
-
-      let y = pad;
-
-      ctx.fillStyle = "rgba(15,31,23,0.92)";
-      ctx.font = "700 18px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-      ctx.fillText("AutoWeave — Visualisations", pad, y);
-      y += 22;
-
-      const meta =
-        `Range: ${state.range === "custom" ? `${state.customFrom} → ${state.customTo}` : state.range} | ` +
-        `Group: ${state.group} | ` +
-        `Mode: ${state.cumulative ? "cumulative" : "daily"}`;
-      ctx.fillStyle = "rgba(15,31,23,0.65)";
-      ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-      ctx.fillText(meta, pad, y);
-      y += 22;
-
-      blocks.forEach((b, i) => {
-        ctx.fillStyle = "rgba(15,31,23,0.88)";
-        ctx.font = "800 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
-        ctx.fillText(b.title, pad, y + 18);
-
-        y += titleH;
-
-        const x = Math.floor((outW - b.canvas.width) / 2);
-        ctx.drawImage(b.canvas, x, y);
-
-        y += b.canvas.height;
-        if (i !== blocks.length - 1) y += 18;
-      });
-
-      const a = document.createElement("a");
-      a.download = "autoweave_visualisations.png";
-      a.href = out.toDataURL("image/png");
-      a.click();
+    const byKey = new Map();
+    for (const r of rows) {
+      const k = keyForDate(r.work_date);
+      if (!byKey.has(k)) byKey.set(k, { key: k, valuesIncome: {}, valuesHours: {}, valuesRatio: {}, totalIncome: 0, totalHours: 0 });
+      const rec = byKey.get(k);
+      rec.valuesIncome[r.project] = (rec.valuesIncome[r.project] || 0) + r.income;
+      rec.valuesHours[r.project] = (rec.valuesHours[r.project] || 0) + r.duration;
+      rec.totalIncome += r.income;
+      rec.totalHours += r.duration;
     }
 
-    // Wire events + defaults
-    setRange(state.range);
-    setGroup(state.group);
-    setCumulative(state.cumulative);
+    // ratio per project per bucket
+    for (const rec of byKey.values()) {
+      for (const p of projectNames) {
+        const inc = Number(rec.valuesIncome[p] || 0);
+        const hrs = Number(rec.valuesHours[p] || 0);
+        rec.valuesRatio[p] = hrs > 0 ? (inc / hrs) : 0;
+      }
+      rec.totalRatio = rec.totalHours > 0 ? (rec.totalIncome / rec.totalHours) : 0;
+    }
 
-    controls.rangeBtns.forEach((btn, key) => btn.addEventListener("click", () => setRange(key)));
-    controls.groupBtns.forEach((btn, key) => btn.addEventListener("click", () => setGroup(key)));
-    controls.cumulativeBtn.addEventListener("click", () => setCumulative(!state.cumulative));
+    const sorted = Array.from(byKey.values()).sort((a, b) => String(a.key).localeCompare(String(b.key)));
 
-    controls.customApply.addEventListener("click", () => {
-      const f = controls.customFrom.value;
-      const t = controls.customTo.value;
-      if (f && t) setCustomRange(f, t);
-    });
-
-    controls.exportBtn.addEventListener("click", exportPng);
-
-    return { setData, render, exportPng };
+    return { projectNames, buckets: sorted };
   }
 
-
-  // ---------------------------------
-  // Auth (reuse backends_db like AutoTrac)
-  // - Adds Login / Register / Forgot password buttons above Build/See panels
-  // - Stores JWT in localStorage, sends Authorization header to backend
-  // - Merge endpoint can stay public; backend can enforce auth for secured uploads later
-  // ---------------------------------
-
-  const AUTH_STORAGE_KEY = "ow_auth_token";
-  const AUTH_EMAIL_KEY = "ow_auth_email";
-
-  function getAuthToken() {
-    return localStorage.getItem(AUTH_STORAGE_KEY) || "";
-  }
-  function setAuthToken(token, email) {
-    if (token) localStorage.setItem(AUTH_STORAGE_KEY, token);
-    if (email) localStorage.setItem(AUTH_EMAIL_KEY, email);
-  }
-  function clearAuthToken() {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(AUTH_EMAIL_KEY);
-  }
-  function getAuthEmail() {
-    return localStorage.getItem(AUTH_EMAIL_KEY) || "";
-  }
-
+  // =========================================================
+  // 5) Auth UI bar + modal
+  // =========================================================
   function ensureAuthBar() {
     const workbench = document.querySelector(".aw-workbench");
     if (!workbench) return null;
@@ -1215,92 +532,108 @@
 
     const status = document.createElement("div");
     status.id = "owAuthStatus";
-    status.style.fontSize = "0.9rem";
-    status.style.opacity = "0.8";
+    status.style.fontWeight = "700";
+    status.style.color = "rgba(15,31,23,0.75)";
+    status.style.display = "inline-flex";
+    status.style.alignItems = "center";
+    status.style.gap = "0.5rem";
 
-    function pill(text) {
-      const b = document.createElement("button");
-      b.textContent = text;
-      stylePillButton(b);
-      b.style.height = "38px";
-      return b;
-    }
+    const btnLogin = document.createElement("button");
+    btnLogin.type = "button";
+    stylePillButton(btnLogin);
+    btnLogin.textContent = "Login";
 
-    const loginBtn = pill("Login");
-    const registerBtn = pill("Register");
-    const forgotBtn = pill("Forgot password");
-    const logoutBtn = pill("Logout");
-    logoutBtn.style.display = "none";
+    const btnRegister = document.createElement("button");
+    btnRegister.type = "button";
+    stylePillButton(btnRegister);
+    btnRegister.textContent = "Register";
 
-    left.appendChild(loginBtn);
-    left.appendChild(registerBtn);
-    left.appendChild(forgotBtn);
+    const btnForgot = document.createElement("button");
+    btnForgot.type = "button";
+    stylePillButton(btnForgot);
+    btnForgot.textContent = "Forgot password";
 
-    right.appendChild(status);
-    right.appendChild(logoutBtn);
+    const btnLogout = document.createElement("button");
+    btnLogout.type = "button";
+    stylePillButton(btnLogout);
+    btnLogout.textContent = "Logout";
+
+    const hint = document.createElement("span");
+    hint.style.fontSize = "0.95rem";
+    hint.style.color = "rgba(15,31,23,0.62)";
+    hint.textContent = "Sign in to merge via backend.";
+
+    left.appendChild(status);
+    left.appendChild(hint);
+
+    right.appendChild(btnLogin);
+    right.appendChild(btnRegister);
+    right.appendChild(btnForgot);
+    right.appendChild(btnLogout);
 
     bar.appendChild(left);
     bar.appendChild(right);
 
-    workbench.parentElement.insertBefore(bar, workbench);
+    // Insert bar above workbench
+    workbench.parentElement?.insertBefore(bar, workbench);
 
-    // Modal
+    // Modal (minimal, local)
     const modal = document.createElement("div");
     modal.id = "owAuthModal";
     modal.style.position = "fixed";
     modal.style.inset = "0";
+    modal.style.background = "rgba(0,0,0,0.35)";
     modal.style.display = "none";
     modal.style.alignItems = "center";
     modal.style.justifyContent = "center";
-    modal.style.padding = "18px";
-    modal.style.background = "rgba(0,0,0,0.55)";
     modal.style.zIndex = "9999";
+    modal.style.padding = "24px";
 
     const panel = document.createElement("div");
     panel.style.width = "min(520px, 92vw)";
+    panel.style.background = "rgba(255,255,255,0.98)";
+    panel.style.border = "1px solid rgba(15,31,23,0.14)";
     panel.style.borderRadius = "18px";
-    panel.style.border = "1px solid rgba(255,255,255,0.18)";
-    panel.style.background = "rgba(255,255,255,0.96)";
-    panel.style.boxShadow = "0 20px 60px rgba(0,0,0,0.35)";
-    panel.style.padding = "16px 16px 14px 16px";
-    panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+    panel.style.boxShadow = "0 18px 40px rgba(0,0,0,0.15)";
+    panel.style.padding = "18px";
 
-    const top = document.createElement("div");
-    top.style.display = "flex";
-    top.style.alignItems = "center";
-    top.style.justifyContent = "space-between";
-    top.style.gap = "10px";
-    top.style.marginBottom = "10px";
+    const head = document.createElement("div");
+    head.style.display = "flex";
+    head.style.justifyContent = "space-between";
+    head.style.alignItems = "center";
+    head.style.gap = "12px";
+    head.style.marginBottom = "10px";
 
     const title = document.createElement("div");
-    title.id = "owAuthModalTitle";
-    title.style.fontWeight = "900";
-    title.style.fontSize = "16px";
+    title.style.fontSize = "1.1rem";
+    title.style.fontWeight = "800";
+    title.style.color = "rgba(15,31,23,0.92)";
+    title.textContent = "Account";
 
     const close = document.createElement("button");
-    close.textContent = "✕";
     close.type = "button";
+    close.textContent = "×";
     close.style.border = "none";
     close.style.background = "transparent";
+    close.style.fontSize = "1.6rem";
+    close.style.lineHeight = "1";
     close.style.cursor = "pointer";
-    close.style.fontSize = "18px";
-    close.style.opacity = "0.7";
+    close.style.color = "rgba(15,31,23,0.70)";
 
-    top.appendChild(title);
-    top.appendChild(close);
-
-    const body = document.createElement("div");
-    body.id = "owAuthModalBody";
+    head.appendChild(title);
+    head.appendChild(close);
 
     const msg = document.createElement("div");
-    msg.id = "owAuthModalMsg";
-    msg.style.marginTop = "10px";
-    msg.style.fontSize = "12px";
-    msg.style.opacity = "0.8";
+    msg.style.fontSize = "0.95rem";
+    msg.style.color = "rgba(15,31,23,0.70)";
+    msg.style.margin = "6px 0 12px 0";
 
-    panel.appendChild(top);
-    panel.appendChild(body);
+    const body = document.createElement("div");
+
+    panel.appendChild(head);
     panel.appendChild(msg);
+    panel.appendChild(body);
+
     modal.appendChild(panel);
     document.body.appendChild(modal);
 
@@ -1356,7 +689,8 @@
       action.style.height = "42px";
       action.style.width = "100%";
       action.style.justifyContent = "center";
-const resend = document.createElement("button");
+
+      const resend = document.createElement("button");
       resend.type = "button";
       stylePillButton(resend);
       resend.style.height = "42px";
@@ -1376,8 +710,8 @@ const resend = document.createElement("button");
         msg.textContent = "We’ll email you a verification link.";
       } else if (mode === "forgot") {
         title.textContent = "Forgot password";
-        action.textContent = "Forgot password";
-        msg.textContent = "Choose an action below.";
+        action.textContent = "Send reset link";
+        msg.textContent = "We’ll email you a reset link (if the account exists).";
         resend.style.display = "inline-flex";
       } else if (mode === "reset") {
         title.textContent = "Reset password";
@@ -1385,7 +719,7 @@ const resend = document.createElement("button");
         msg.textContent = "Choose a new password (min 8 characters).";
       } else {
         title.textContent = "Verify email";
-        action.textContent = "Verifying…";
+        action.textContent = "Verify email";
         msg.textContent = "Confirming your email.";
       }
 
@@ -1405,6 +739,26 @@ const resend = document.createElement("button");
         body.appendChild(action);
         if (mode === "forgot") body.appendChild(resend);
       }
+
+      // ✅ Resend handler must be inside openModal (resend is scoped here)
+      resend.addEventListener("click", async () => {
+        const em = email.value.trim();
+        if (!em) {
+          msg.textContent = "Please enter your email.";
+          return;
+        }
+        try {
+          resend.disabled = true;
+          resend.style.opacity = "0.7";
+          await authResendVerify(em);
+          msg.textContent = "Verification email sent (if the account exists).";
+        } catch (e) {
+          msg.textContent = e?.message ? String(e.message) : String(e);
+        } finally {
+          resend.disabled = false;
+          resend.style.opacity = "1";
+        }
+      });
 
       action.addEventListener("click", async () => {
         const em = email.value.trim();
@@ -1489,32 +843,12 @@ const resend = document.createElement("button");
           action.style.opacity = "1";
         }
       });
-    }
-
-      resend.addEventListener("click", async () => {
-        const em = email.value.trim();
-        if (!em) {
-          msg.textContent = "Please enter your email.";
-          return;
-        }
-        try {
-          resend.disabled = true;
-          resend.style.opacity = "0.7";
-          await authResendVerify(em);
-          msg.textContent = "Verification email sent (if the account exists).";
-        } catch (e) {
-          msg.textContent = e?.message ? String(e.message) : String(e);
-        } finally {
-          resend.disabled = false;
-          resend.style.opacity = "1";
-        }
-      });
-
 
       // Auto-run verification when opened from a link
       if (mode === "verify" && opts.token && opts.email) {
         setTimeout(() => action.click(), 50);
       }
+    }
 
     function closeModal() {
       modal.style.display = "none";
@@ -1524,394 +858,231 @@ const resend = document.createElement("button");
     modal.addEventListener("click", (e) => {
       if (e.target === modal) closeModal();
     });
-    document.addEventListener("keydown", (e) => {
-      if (modal.style.display !== "none" && e.key === "Escape") closeModal();
-    });
-
-    loginBtn.addEventListener("click", () => openModal("login"));
-    registerBtn.addEventListener("click", () => openModal("register"));
-    forgotBtn.addEventListener("click", () => openModal("forgot"));
-
-    logoutBtn.addEventListener("click", () => {
-      clearAuthToken();
-      syncAuthUi();
-    });
 
     function syncAuthUi() {
       const token = getAuthToken();
       const email = getAuthEmail();
-      if (token) {
-        status.textContent = email ? `Signed in: ${email}` : "Signed in";
-        logoutBtn.style.display = "inline-flex";
-        loginBtn.style.display = "none";
-        registerBtn.style.display = "none";
-        forgotBtn.style.display = "none";
-      } else {
-        status.textContent = "Guest mode";
-        logoutBtn.style.display = "none";
-        loginBtn.style.display = "inline-flex";
-        registerBtn.style.display = "inline-flex";
-        forgotBtn.style.display = "inline-flex";
+      const authed = !!token;
+
+      status.textContent = authed ? `Signed in: ${email || "account"}` : "Signed out";
+
+      btnLogin.style.display = authed ? "none" : "inline-flex";
+      btnRegister.style.display = authed ? "none" : "inline-flex";
+      btnForgot.style.display = authed ? "none" : "inline-flex";
+      btnLogout.style.display = authed ? "inline-flex" : "none";
+
+      hint.style.display = authed ? "none" : "inline";
+    }
+
+    btnLogin.addEventListener("click", () => openModal("login"));
+    btnRegister.addEventListener("click", () => openModal("register"));
+    btnForgot.addEventListener("click", () => openModal("forgot"));
+    btnLogout.addEventListener("click", () => {
+      clearAuthToken();
+      syncAuthUi();
+    });
+
+    // Handle verify/reset links in URL:
+    // ?mode=verify&email=...&token=...
+    // ?mode=reset&email=...&token=...
+    function handleAuthLinkFromUrl() {
+      const url = new URL(window.location.href);
+      const mode = url.searchParams.get("mode") || "";
+      const email = url.searchParams.get("email") || "";
+      const token = url.searchParams.get("token") || "";
+
+      if (mode === "verify" && email && token) {
+        openModal("verify", { email, token, lockEmail: true });
+      }
+      if (mode === "reset" && email && token) {
+        openModal("reset", { email, token, lockEmail: true });
       }
     }
 
-    bar.__owSyncAuthUi = syncAuthUi;
-    window.__owOpenAuthModal = openModal;
     syncAuthUi();
+    handleAuthLinkFromUrl();
 
     return bar;
   }
 
-  async function authJson(path, payload) {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload || {}),
-    });
+  // =========================================================
+  // 6) Workbench wiring (upload + merge)
+  // =========================================================
+  function initWorkbench() {
+    const incomesFile = document.getElementById("incomesFile");
+    const entriesFile = document.getElementById("entriesFile");
+    const projectsFile = document.getElementById("projectsFile");
+    const mergeBtn = document.getElementById("mergeBtn");
+    const resetAllBtn = document.getElementById("resetAllBtn");
 
-    const text = await res.text().catch(() => "");
-    let data = {};
-    try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
-
-    if (!res.ok) {
-      const msg = data?.detail || data?.message || `Auth error (${res.status})`;
-      throw new Error(msg);
-    }
-    return data;
+    const statusBox = document.getElementById("statusBox");
+    const previewMerged = document.getElementById("previewMerged");
+    const statsMerged = document.getElementById("statsMerged");
+    const downloadBtn = document.getElementById("downloadBtn");
+  function setBoxText(el, txt) {
+    if (!el) return;
+    if (typeof el.value === "string") el.value = txt;
+    else el.textContent = txt;
   }
 
-  async function authRegister(email, password) {
-    return authJson("/api/v1/auth/register", { email, password });
-  }
-  async function authLogin(email, password) {
-    return authJson("/api/v1/auth/login", { email, password });
-  }
-  async function authForgot(email) {
-    return authJson("/api/v1/auth/forgot", { email });
-  }
-  async function authResendVerify(email) {
-    return authJson("/api/v1/auth/resend-verify", { email });
-  }
-  async function authVerify(email, token) {
-    return authJson("/api/v1/auth/verify", { email, token });
-  }
-  async function authReset(email, token, new_password) {
-    return authJson("/api/v1/auth/reset", { email, token, new_password });
-  }
 
-  // ---------------------------------
-  // Workbench: backend merge
-  // ---------------------------------
-
-  const API_BASE = "https://autoweave-backend.onrender.com";
-
-  // URL params (used by verify/reset deep links)
-  const __owUrl = new URL(window.location.href);
-  const mode = (__owUrl.searchParams.get("mode") || "").toLowerCase();
-  const deepEmail = (__owUrl.searchParams.get("email") || "").trim();
-  const deepToken = (__owUrl.searchParams.get("token") || "").trim();
-
-  // Auth bar (Login / Register / Forgot password)
-  const _owAuthBar = ensureAuthBar();
-
-  // Handle links from emails:
-  //   Verify: ...?mode=verify&email=...&token=...
-  //   Reset:  ...?mode=reset&email=...&token=...
-  (function handleAuthLinks() {
-    try {
-      const params = new URLSearchParams(window.location.search || "");
-      const mode = (params.get("mode") || "").trim().toLowerCase();
-      const email = (params.get("email") || "").trim();
-      const token = (params.get("token") || "").trim();
-
-      if ((mode === "verify" || mode === "reset") && email && token && typeof window.__owOpenAuthModal === "function") {
-        window.__owOpenAuthModal(mode, { email, token, lockEmail: true });
-      }
-    } catch (e) {
-      // ignore
-    }
-  })();
-
-  const projectsFile = document.getElementById("projectsFile");
-  const incomesFile = document.getElementById("incomesFile");
-  const entriesFile = document.getElementById("entriesFile");
-
-  const runBtn = document.getElementById("runMergeBtn");
-  const resetBtn = document.getElementById("resetAllBtn");
-
-  const statusBox = document.getElementById("statusBox");
-  const previewMerged = document.getElementById("previewMerged");
-  const statsMerged = document.getElementById("statsMerged");
-  const downloadBtn = document.getElementById("downloadBtn");
-
-  if (!incomesFile || !entriesFile || !runBtn || !resetBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
-    return;
-  }
-
-  const statsPanel = ensureStatsPanel(statsMerged);
-
-  const visCard = findVisualisationsCard();
-  const chartsArea = ensureChartsArea(visCard);
-
-  // Create chart blocks once
-  let incomeBlock, durationBlock, ratioBlock;
-
-  if (chartsArea) {
-    if (!chartsArea.querySelector("#owChartIncome")) {
-      incomeBlock = makeCanvasBlock("Total income by project");
-      incomeBlock.wrap.id = "owChartIncome";
-      chartsArea.appendChild(incomeBlock.wrap);
-
-      durationBlock = makeCanvasBlock("Total time by project");
-      durationBlock.wrap.id = "owChartDuration";
-      chartsArea.appendChild(durationBlock.wrap);
-
-      ratioBlock = makeCanvasBlock("Hourly rate by project");
-      ratioBlock.wrap.id = "owChartRatio";
-      chartsArea.appendChild(ratioBlock.wrap);
-    } else {
-      const getBlock = (id) => {
-        const wrap = chartsArea.querySelector(id);
-        return {
-          wrap,
-          canvas: wrap?.querySelector("canvas") || null,
-          legend: wrap?.querySelector("div:nth-child(2)") || null,
-          tip: wrap?.querySelector("div:last-child") || null,
-        };
-      };
-      incomeBlock = getBlock("#owChartIncome");
-      durationBlock = getBlock("#owChartDuration");
-      ratioBlock = getBlock("#owChartRatio");
-    }
-  }
-
-  const chartController =
-    visCard && chartsArea && incomeBlock && durationBlock && ratioBlock
-      ? createChartController({ visCard, chartsArea, incomeBlock, durationBlock, ratioBlock })
-      : null;
-
-  function setStatus(msg) {
-    statusBox.value = msg;
-  }
-
-  function clearVisuals() {
-    if (statsPanel) clearNode(statsPanel);
-
-    [incomeBlock?.canvas, durationBlock?.canvas, ratioBlock?.canvas].forEach((c) => {
-      if (!c) return;
-      const ctx = c.getContext("2d");
-      if (!ctx) return;
-      ctx.clearRect(0, 0, c.width, c.height);
-    });
-
-    [incomeBlock?.tip, durationBlock?.tip, ratioBlock?.tip].forEach((t) => {
-      if (t) t.style.display = "none";
-    });
-
-    [incomeBlock?.legend, durationBlock?.legend, ratioBlock?.legend].forEach((l) => {
-      if (l) l.innerHTML = "";
-    });
-  }
-
-  function resetAll() {
-    if (projectsFile) projectsFile.value = "";
-    incomesFile.value = "";
-    entriesFile.value = "";
-
-    previewMerged.value = "";
-    statsMerged.value = "";
-    setStatus("");
-
-    downloadBtn.style.display = "none";
-    downloadBtn.removeAttribute("href");
-
-    clearVisuals();
-  }
-
-  resetBtn.addEventListener("click", resetAll);
-
-  function buildStatsAndChartsFromCsv(csvText) {
-    const { rows } = parseCsv(csvText);
-    const rowCount = rows.length;
-
-    const incomeAccessor = chooseIncomeAccessor(rows);
-    const incomeLabel = incomeAccessor.label === "amount_gbp" ? "GBP" : "amount";
-
-    let totalDuration = 0;
-    let totalIncome = 0;
-
-    const projMap = new Map(); // project -> {income, duration}
-
-    const incomeByDateProject = new Map();
-    const durationByDateProject = new Map();
-
-    const dateSet = new Set();
-
-    for (const r of rows) {
-      const project = (r.project_name || "(unknown)").trim() || "(unknown)";
-      const date = (r.date || "").trim();
-      const duration = toNumber(r.duration_hours);
-      const income = incomeAccessor.get(r);
-
-      if (date) dateSet.add(date);
-
-      totalDuration += duration;
-      totalIncome += income;
-
-      const prev = projMap.get(project) || { income: 0, duration: 0 };
-      prev.income += income;
-      prev.duration += duration;
-      projMap.set(project, prev);
-
-      if (!incomeByDateProject.has(date)) incomeByDateProject.set(date, new Map());
-      if (!durationByDateProject.has(date)) durationByDateProject.set(date, new Map());
-
-      incomeByDateProject.get(date).set(project, (incomeByDateProject.get(date).get(project) || 0) + income);
-      durationByDateProject.get(date).set(project, (durationByDateProject.get(date).get(project) || 0) + duration);
-    }
-
-    const overallRatio = safeDiv(totalIncome, totalDuration);
-
-    const projArr = Array.from(projMap.entries()).map(([name, v]) => ({
-      name,
-      income: v.income,
-      duration: v.duration,
-      ratio: safeDiv(v.income, v.duration),
-    }));
-
-    const incomeByProject = [...projArr].sort((a, b) => b.income - a.income);
-    const durationByProject = [...projArr].sort((a, b) => b.duration - a.duration);
-    const ratioByProject = [...projArr].sort((a, b) => b.ratio - a.ratio);
-
-    if (statsPanel) {
-      clearNode(statsPanel);
-
-      statsPanel.appendChild(
-        makeSummaryGrid([
-          { k: "Row count", v: formatInt(rowCount) },
-          { k: "Time (hours)", v: formatNumber(totalDuration, 2) },
-          { k: `Income (${incomeLabel})`, v: formatNumber(totalIncome, 2) },
-          { k: "Average rate", v: formatNumber(overallRatio, 2) },
-        ])
-      );
-
-      const topN = 8;
-
-      const grid = document.createElement("div");
-      grid.style.display = "grid";
-      grid.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
-      grid.style.gap = "0.75rem";
-
-      grid.appendChild(
-        makeMiniTable(
-          `Income`,
-          incomeByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.income, 2) })),
-          { col1: "Project", col2: `${incomeLabel}` }
-        )
-      );
-
-      grid.appendChild(
-        makeMiniTable(
-          "Time",
-          durationByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.duration, 2) })),
-          { col1: "Project", col2: "Hours" }
-        )
-      );
-
-      grid.appendChild(
-        makeMiniTable(
-          `Hourly rate`,
-          ratioByProject.slice(0, topN).map((x) => ({ name: x.name, value: formatNumber(x.ratio, 2) })),
-          { col1: "Project", col2: `${incomeLabel}/h` }
-        )
-      );
-
-      statsPanel.appendChild(grid);
-    }
-
-    const maxProjects = 6;
-    const topProjects = incomeByProject.slice(0, maxProjects).map((x) => x.name);
-    const legendMore = Math.max(0, projArr.length - topProjects.length);
-
-    const dates = sortIsoDates(dateSet);
-    const { min: minDate, max: maxDate } = getMinMaxDates(dates);
-
-    if (chartController) {
-      chartController.setData({
-        dates,
-        topProjects,
-        legendMore,
-        incomeByDateProject,
-        durationByDateProject,
-        minDate,
-        maxDate,
-      });
-    }
-  }
-
-  async function runMerge() {
-    const entries = entriesFile.files?.[0];
-    const incomes = incomesFile.files?.[0];
-    const projects = projectsFile?.files?.[0];
-
-    if (!entries || !incomes) {
-      setStatus("Please select at least 2 files: Time entries CSV + Income CSV. (Projects CSV optional.)");
+    if (!incomesFile || !entriesFile ||
+        !mergeBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
       return;
     }
 
-    downloadBtn.style.display = "none";
-    downloadBtn.removeAttribute("href");
-    previewMerged.value = "";
-    statsMerged.value = "";
-    clearVisuals();
-
-    setStatus("Uploading files…");
-
-    const form = new FormData();
-    form.append("time_entries_csv", entries);
-    form.append("incomes_csv", incomes);
-    if (projects) form.append("projects_csv", projects);
-
-    try {
-      setStatus("Processing…");
-
-      const token = getAuthToken();
-      const res = await fetch(`${API_BASE}/api/v1/merge/autotrac`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: form,
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        setStatus(`Backend error (${res.status}): ${text}`);
-        return;
-      }
-
-      const data = await res.json();
-
-      statsMerged.value = JSON.stringify(data.stats ?? {}, null, 2);
-
-      const hasCsv = typeof data.download_csv === "string" && data.download_csv.length > 0;
-      if (!hasCsv) {
-        setStatus(`No output returned. mode=${data.mode ?? "unknown"}`);
-        return;
-      }
-
-      previewMerged.value = (data.preview_csv ?? "").slice(0, 8000);
-
-      const blob = new Blob([data.download_csv], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      downloadBtn.href = url;
-      downloadBtn.style.display = "inline-flex";
-
-      buildStatsAndChartsFromCsv(data.download_csv);
-
-      setStatus(`Done ✔ (${data.mode ?? "ok"})`);
-    } catch (err) {
-      setStatus(`Request failed: ${err?.message ?? String(err)}`);
+    function setStatus(text) {
+      statusBox.textContent = text || "";
     }
+
+    function clearVisuals() {
+      const visIncome = document.getElementById("visIncome");
+      const visDuration = document.getElementById("visDuration");
+      const visRatio = document.getElementById("visRatio");
+      if (visIncome) clearEl(visIncome);
+      if (visDuration) clearEl(visDuration);
+      if (visRatio) clearEl(visRatio);
+    }
+
+    function renderVisualsFromMergedCsv(csvText) {
+      const rows = parseCsv(csvText);
+      const objs = rowsToObjects(rows);
+      const groupSel = document.getElementById("groupBySel");
+      const group = groupSel ? String(groupSel.value || "day") : "day";
+
+      const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
+
+      const visIncome = document.getElementById("visIncome");
+      const visDuration = document.getElementById("visDuration");
+      const visRatio = document.getElementById("visRatio");
+      if (!visIncome || !visDuration || !visRatio) return;
+
+      const incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
+      const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
+      const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
+
+      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
+      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
+      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
+    }
+
+    function resetAll() {
+      if (projectsFile) projectsFile.value = "";
+      incomesFile.value = "";
+      entriesFile.value = "";
+
+      setBoxText(previewMerged, "");
+      setBoxText(statsMerged, "");
+      setStatus("");
+
+      downloadBtn.style.display = "none";
+
+      downloadBtn.removeAttribute("href");
+      clearVisuals();
+    }
+
+    resetAllBtn?.addEventListener("click", resetAll);
+
+    // Grouping control (re-render visuals if preview exists)
+    const groupSel = document.getElementById("groupBySel");
+    if (groupSel) {
+      groupSel.addEventListener("change", () => {
+        const txt = (typeof previewMerged.value === "string") ? previewMerged.value : previewMerged.textContent;
+        if (txt) renderVisualsFromMergedCsv(txt);
+      });
+    }
+
+    // Merge action: call backend
+    mergeBtn.addEventListener("click", async () => {
+      const entries = entriesFile.files?.[0];
+      const incomes = incomesFile.files?.[0];
+      const projects = projectsFile?.files?.[0] || null;
+
+      if (!entries || !incomes) {
+        setStatus("Please upload both Time entries and Incomes CSVs.");
+        return;
+      }
+
+      downloadBtn.style.display = "none";
+      downloadBtn.removeAttribute("href");
+      setBoxText(previewMerged, "");
+      setBoxText(statsMerged, "");
+      clearVisuals();
+
+      setStatus("Uploading files…");
+
+      const form = new FormData();
+      form.append("time_entries_csv", entries);
+      form.append("incomes_csv", incomes);
+      if (projects) form.append("projects_csv", projects);
+
+      try {
+        const res = await apiFetch("/api/v1/merge", {
+          method: "POST",
+          body: form,
+        });
+
+        const data = await res.json();
+
+        setBoxText(statsMerged, JSON.stringify(data.stats ?? {}, null, 2));
+
+        const hasCsv = typeof data.download_csv === "string" && data.download_csv.length > 0;
+        if (!hasCsv) {
+          setStatus(`No output CSV returned.`);
+          return;
+        }
+
+        // Show preview and download
+        const csv = data.download_csv;
+        setBoxText(previewMerged, csv);
+
+        // Build a blob download link
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        downloadBtn.href = url;
+        downloadBtn.download = "merged.csv";
+        downloadBtn.style.display = "inline-flex";
+
+        setStatus("Merge complete ✔");
+
+        // Render visuals
+        renderVisualsFromMergedCsv(csv);
+
+      } catch (e) {
+        const msg = e?.message ? String(e.message) : String(e);
+        setStatus(`Error: ${msg}`);
+      }
+    });
   }
 
-  runBtn.addEventListener("click", runMerge);
+  // =========================================================
+  // 7) Guided local preview (single CSV)
+  // =========================================================
+  function initGuidedExample() {
+    const fileInput = document.getElementById("guidedCsvFile");
+    const preview = document.getElementById("guidedPreview");
+    if (!fileInput || !preview) return;
+
+    fileInput.addEventListener("change", async () => {
+      const f = fileInput.files?.[0];
+      if (!f) return;
+      const txt = await f.text();
+      preview.value = txt;
+    });
+  }
+
+  // =========================================================
+  // 8) Boot
+  // =========================================================
+  function boot() {
+    ensureAuthBar();
+    initGuidedExample();
+    initWorkbench();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
 })();
