@@ -1303,7 +1303,7 @@
     modal.appendChild(panel);
     document.body.appendChild(modal);
 
-    function openModal(mode) {
+    function openModal(mode, opts = {}) {
       modal.style.display = "flex";
       msg.textContent = "";
       body.innerHTML = "";
@@ -1311,7 +1311,12 @@
       const email = document.createElement("input");
       email.type = "email";
       email.placeholder = "Email";
-      email.value = getAuthEmail();
+      email.value = (opts.email ?? getAuthEmail());
+      if (opts.lockEmail) {
+        email.disabled = true;
+        email.style.opacity = "0.85";
+        email.style.cursor = "not-allowed";
+      }
       email.style.width = "100%";
       email.style.height = "42px";
       email.style.borderRadius = "12px";
@@ -1322,7 +1327,7 @@
 
       const password = document.createElement("input");
       password.type = "password";
-      password.placeholder = "Password";
+      password.placeholder = (mode === "reset") ? "New password" : "Password";
       password.style.width = "100%";
       password.style.height = "42px";
       password.style.borderRadius = "12px";
@@ -1330,7 +1335,7 @@
       password.style.padding = "0 12px";
       password.style.marginBottom = "10px";
       password.style.background = "white";
-      if (mode === "forgot") password.style.display = "none";
+      if (mode === "forgot" || mode === "verify") password.style.display = "none";
 
       const password2 = document.createElement("input");
       password2.type = "password";
@@ -1342,7 +1347,7 @@
       password2.style.padding = "0 12px";
       password2.style.marginBottom = "10px";
       password2.style.background = "white";
-      if (mode !== "register") password2.style.display = "none";
+      if (mode !== "register" && mode !== "reset") password2.style.display = "none";
 
       const action = document.createElement("button");
       action.type = "button";
@@ -1354,26 +1359,46 @@
       if (mode === "login") {
         title.textContent = "Login";
         action.textContent = "Login";
-        msg.textContent = "Tip: you may need to verify your email before logging in (if enabled).";
+        msg.textContent = "Tip: verify your email first (check inbox).";
       } else if (mode === "register") {
         title.textContent = "Register";
         action.textContent = "Create account";
-        msg.textContent = "We’ll send a welcome email + verification (if enabled).";
-      } else {
+        msg.textContent = "We’ll email you a verification link.";
+      } else if (mode === "forgot") {
         title.textContent = "Forgot password";
         action.textContent = "Send reset link";
         msg.textContent = "We’ll email you a reset link if the account exists.";
+      } else if (mode === "reset") {
+        title.textContent = "Reset password";
+        action.textContent = "Set new password";
+        msg.textContent = "Choose a new password (min 8 characters).";
+      } else {
+        title.textContent = "Verify email";
+        action.textContent = "Verifying…";
+        msg.textContent = "Confirming your email.";
       }
 
-      body.appendChild(email);
-      body.appendChild(password);
-      body.appendChild(password2);
-      body.appendChild(action);
+      if (mode === "verify") {
+        const note = document.createElement("div");
+        note.style.fontSize = "0.95rem";
+        note.style.lineHeight = "1.35";
+        note.style.marginBottom = "10px";
+        note.textContent = "Confirming your email…";
+        body.appendChild(note);
+        if (opts.email) body.appendChild(email);
+        body.appendChild(action);
+      } else {
+        body.appendChild(email);
+        body.appendChild(password);
+        body.appendChild(password2);
+        body.appendChild(action);
+      }
 
       action.addEventListener("click", async () => {
         const em = email.value.trim();
         const pw = password.value;
         const pw2 = password2.value;
+        const linkToken = (opts.token || "").trim();
 
         if (!em) {
           msg.textContent = "Please enter your email.";
@@ -1400,11 +1425,44 @@
               return;
             }
             await authRegister(em, pw);
-            msg.textContent = "Account created ✔ Check your email for verification/welcome.";
+            msg.textContent = "Account created ✔ Check your email to verify.";
             setTimeout(closeModal, 700);
-          } else {
+          } else if (mode === "forgot") {
             await authForgot(em);
             msg.textContent = "If that email exists, a reset link has been sent.";
+          } else if (mode === "reset") {
+            if (!linkToken) {
+              msg.textContent = "Reset token missing. Please open the link from your email again.";
+              return;
+            }
+            if (!pw || pw.length < 8) {
+              msg.textContent = "Password must be at least 8 characters.";
+              return;
+            }
+            if (pw !== pw2) {
+              msg.textContent = "Passwords do not match.";
+              return;
+            }
+            await authReset(em, linkToken, pw);
+            msg.textContent = "Password updated ✔ You can log in now.";
+            setTimeout(() => {
+              try { history.replaceState({}, "", window.location.pathname + window.location.hash); } catch (e) {}
+              closeModal();
+              openModal("login", { email: em });
+            }, 650);
+          } else {
+            // verify
+            if (!opts.email || !linkToken) {
+              msg.textContent = "Verification link incomplete. Please open the link from your email again.";
+              return;
+            }
+            await authVerify(opts.email, linkToken);
+            msg.textContent = "Email verified ✔ You can log in now.";
+            setTimeout(() => {
+              try { history.replaceState({}, "", window.location.pathname + window.location.hash); } catch (e) {}
+              closeModal();
+              openModal("login", { email: opts.email });
+            }, 650);
           }
         } catch (e) {
           msg.textContent = e?.message ? String(e.message) : String(e);
@@ -1414,6 +1472,11 @@
         }
       });
     }
+
+      // Auto-run verification when opened from a link
+      if (mode === "verify" && opts.token && opts.email) {
+        setTimeout(() => action.click(), 50);
+      }
 
     function closeModal() {
       modal.style.display = "none";
@@ -1455,6 +1518,7 @@
     }
 
     bar.__owSyncAuthUi = syncAuthUi;
+    window.__owOpenAuthModal = openModal;
     syncAuthUi();
 
     return bar;
@@ -1487,6 +1551,12 @@
   async function authForgot(email) {
     return authJson("/api/v1/auth/forgot", { email });
   }
+  async function authVerify(email, token) {
+    return authJson("/api/v1/auth/verify", { email, token });
+  }
+  async function authReset(email, token, new_password) {
+    return authJson("/api/v1/auth/reset", { email, token, new_password });
+  }
 
   // ---------------------------------
   // Workbench: backend merge
@@ -1495,7 +1565,25 @@
   const API_BASE = "https://autoweave-backend.onrender.com";
 
   // Auth bar (Login / Register / Forgot password)
-  ensureAuthBar();
+  const _owAuthBar = ensureAuthBar();
+
+  // Handle links from emails:
+  //   Verify: ...?mode=verify&email=...&token=...
+  //   Reset:  ...?mode=reset&email=...&token=...
+  (function handleAuthLinks() {
+    try {
+      const params = new URLSearchParams(window.location.search || "");
+      const mode = (params.get("mode") || "").trim().toLowerCase();
+      const email = (params.get("email") || "").trim();
+      const token = (params.get("token") || "").trim();
+
+      if ((mode === "verify" || mode === "reset") && email && token && typeof window.__owOpenAuthModal === "function") {
+        window.__owOpenAuthModal(mode, { email, token, lockEmail: true });
+      }
+    } catch (e) {
+      // ignore
+    }
+  })();
 
   const projectsFile = document.getElementById("projectsFile");
   const incomesFile = document.getElementById("incomesFile");
