@@ -1158,11 +1158,344 @@
     return { setData, render, exportPng };
   }
 
+
+  // ---------------------------------
+  // Auth (reuse backends_db like AutoTrac)
+  // - Adds Login / Register / Forgot password buttons above Build/See panels
+  // - Stores JWT in localStorage, sends Authorization header to backend
+  // - Merge endpoint can stay public; backend can enforce auth for secured uploads later
+  // ---------------------------------
+
+  const AUTH_STORAGE_KEY = "ow_auth_token";
+  const AUTH_EMAIL_KEY = "ow_auth_email";
+
+  function getAuthToken() {
+    return localStorage.getItem(AUTH_STORAGE_KEY) || "";
+  }
+  function setAuthToken(token, email) {
+    if (token) localStorage.setItem(AUTH_STORAGE_KEY, token);
+    if (email) localStorage.setItem(AUTH_EMAIL_KEY, email);
+  }
+  function clearAuthToken() {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(AUTH_EMAIL_KEY);
+  }
+  function getAuthEmail() {
+    return localStorage.getItem(AUTH_EMAIL_KEY) || "";
+  }
+
+  function ensureAuthBar() {
+    const workbench = document.querySelector(".aw-workbench");
+    if (!workbench) return null;
+
+    const existing = workbench.parentElement?.querySelector("#owAuthBar");
+    if (existing) return existing;
+
+    const bar = document.createElement("div");
+    bar.id = "owAuthBar";
+    bar.style.display = "flex";
+    bar.style.justifyContent = "space-between";
+    bar.style.alignItems = "center";
+    bar.style.gap = "0.75rem";
+    bar.style.flexWrap = "wrap";
+    bar.style.margin = "0 0 0.9rem 0";
+
+    const left = document.createElement("div");
+    left.style.display = "flex";
+    left.style.gap = "0.55rem";
+    left.style.flexWrap = "wrap";
+    left.style.alignItems = "center";
+
+    const right = document.createElement("div");
+    right.style.display = "flex";
+    right.style.gap = "0.55rem";
+    right.style.flexWrap = "wrap";
+    right.style.alignItems = "center";
+
+    const status = document.createElement("div");
+    status.id = "owAuthStatus";
+    status.style.fontSize = "0.9rem";
+    status.style.opacity = "0.8";
+
+    function pill(text) {
+      const b = document.createElement("button");
+      b.textContent = text;
+      stylePillButton(b);
+      b.style.height = "38px";
+      return b;
+    }
+
+    const loginBtn = pill("Login");
+    const registerBtn = pill("Register");
+    const forgotBtn = pill("Forgot password");
+    const logoutBtn = pill("Logout");
+    logoutBtn.style.display = "none";
+
+    left.appendChild(loginBtn);
+    left.appendChild(registerBtn);
+    left.appendChild(forgotBtn);
+
+    right.appendChild(status);
+    right.appendChild(logoutBtn);
+
+    bar.appendChild(left);
+    bar.appendChild(right);
+
+    workbench.parentElement.insertBefore(bar, workbench);
+
+    // Modal
+    const modal = document.createElement("div");
+    modal.id = "owAuthModal";
+    modal.style.position = "fixed";
+    modal.style.inset = "0";
+    modal.style.display = "none";
+    modal.style.alignItems = "center";
+    modal.style.justifyContent = "center";
+    modal.style.padding = "18px";
+    modal.style.background = "rgba(0,0,0,0.55)";
+    modal.style.zIndex = "9999";
+
+    const panel = document.createElement("div");
+    panel.style.width = "min(520px, 92vw)";
+    panel.style.borderRadius = "18px";
+    panel.style.border = "1px solid rgba(255,255,255,0.18)";
+    panel.style.background = "rgba(255,255,255,0.96)";
+    panel.style.boxShadow = "0 20px 60px rgba(0,0,0,0.35)";
+    panel.style.padding = "16px 16px 14px 16px";
+    panel.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+
+    const top = document.createElement("div");
+    top.style.display = "flex";
+    top.style.alignItems = "center";
+    top.style.justifyContent = "space-between";
+    top.style.gap = "10px";
+    top.style.marginBottom = "10px";
+
+    const title = document.createElement("div");
+    title.id = "owAuthModalTitle";
+    title.style.fontWeight = "900";
+    title.style.fontSize = "16px";
+
+    const close = document.createElement("button");
+    close.textContent = "✕";
+    close.type = "button";
+    close.style.border = "none";
+    close.style.background = "transparent";
+    close.style.cursor = "pointer";
+    close.style.fontSize = "18px";
+    close.style.opacity = "0.7";
+
+    top.appendChild(title);
+    top.appendChild(close);
+
+    const body = document.createElement("div");
+    body.id = "owAuthModalBody";
+
+    const msg = document.createElement("div");
+    msg.id = "owAuthModalMsg";
+    msg.style.marginTop = "10px";
+    msg.style.fontSize = "12px";
+    msg.style.opacity = "0.8";
+
+    panel.appendChild(top);
+    panel.appendChild(body);
+    panel.appendChild(msg);
+    modal.appendChild(panel);
+    document.body.appendChild(modal);
+
+    function openModal(mode) {
+      modal.style.display = "flex";
+      msg.textContent = "";
+      body.innerHTML = "";
+
+      const email = document.createElement("input");
+      email.type = "email";
+      email.placeholder = "Email";
+      email.value = getAuthEmail();
+      email.style.width = "100%";
+      email.style.height = "42px";
+      email.style.borderRadius = "12px";
+      email.style.border = "1px solid rgba(15,31,23,0.14)";
+      email.style.padding = "0 12px";
+      email.style.marginBottom = "10px";
+      email.style.background = "white";
+
+      const password = document.createElement("input");
+      password.type = "password";
+      password.placeholder = "Password";
+      password.style.width = "100%";
+      password.style.height = "42px";
+      password.style.borderRadius = "12px";
+      password.style.border = "1px solid rgba(15,31,23,0.14)";
+      password.style.padding = "0 12px";
+      password.style.marginBottom = "10px";
+      password.style.background = "white";
+      if (mode === "forgot") password.style.display = "none";
+
+      const password2 = document.createElement("input");
+      password2.type = "password";
+      password2.placeholder = "Confirm password";
+      password2.style.width = "100%";
+      password2.style.height = "42px";
+      password2.style.borderRadius = "12px";
+      password2.style.border = "1px solid rgba(15,31,23,0.14)";
+      password2.style.padding = "0 12px";
+      password2.style.marginBottom = "10px";
+      password2.style.background = "white";
+      if (mode !== "register") password2.style.display = "none";
+
+      const action = document.createElement("button");
+      action.type = "button";
+      stylePillButton(action);
+      action.style.height = "42px";
+      action.style.width = "100%";
+      action.style.justifyContent = "center";
+
+      if (mode === "login") {
+        title.textContent = "Login";
+        action.textContent = "Login";
+        msg.textContent = "Tip: you may need to verify your email before logging in (if enabled).";
+      } else if (mode === "register") {
+        title.textContent = "Register";
+        action.textContent = "Create account";
+        msg.textContent = "We’ll send a welcome email + verification (if enabled).";
+      } else {
+        title.textContent = "Forgot password";
+        action.textContent = "Send reset link";
+        msg.textContent = "We’ll email you a reset link if the account exists.";
+      }
+
+      body.appendChild(email);
+      body.appendChild(password);
+      body.appendChild(password2);
+      body.appendChild(action);
+
+      action.addEventListener("click", async () => {
+        const em = email.value.trim();
+        const pw = password.value;
+        const pw2 = password2.value;
+
+        if (!em) {
+          msg.textContent = "Please enter your email.";
+          return;
+        }
+
+        try {
+          action.disabled = true;
+          action.style.opacity = "0.7";
+
+          if (mode === "login") {
+            const out = await authLogin(em, pw);
+            setAuthToken(out.access_token, em);
+            msg.textContent = "Logged in ✔";
+            syncAuthUi();
+            setTimeout(closeModal, 450);
+          } else if (mode === "register") {
+            if (!pw || pw.length < 8) {
+              msg.textContent = "Password must be at least 8 characters.";
+              return;
+            }
+            if (pw !== pw2) {
+              msg.textContent = "Passwords do not match.";
+              return;
+            }
+            await authRegister(em, pw);
+            msg.textContent = "Account created ✔ Check your email for verification/welcome.";
+            setTimeout(closeModal, 700);
+          } else {
+            await authForgot(em);
+            msg.textContent = "If that email exists, a reset link has been sent.";
+          }
+        } catch (e) {
+          msg.textContent = e?.message ? String(e.message) : String(e);
+        } finally {
+          action.disabled = false;
+          action.style.opacity = "1";
+        }
+      });
+    }
+
+    function closeModal() {
+      modal.style.display = "none";
+    }
+
+    close.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (modal.style.display !== "none" && e.key === "Escape") closeModal();
+    });
+
+    loginBtn.addEventListener("click", () => openModal("login"));
+    registerBtn.addEventListener("click", () => openModal("register"));
+    forgotBtn.addEventListener("click", () => openModal("forgot"));
+
+    logoutBtn.addEventListener("click", () => {
+      clearAuthToken();
+      syncAuthUi();
+    });
+
+    function syncAuthUi() {
+      const token = getAuthToken();
+      const email = getAuthEmail();
+      if (token) {
+        status.textContent = email ? `Signed in: ${email}` : "Signed in";
+        logoutBtn.style.display = "inline-flex";
+        loginBtn.style.display = "none";
+        registerBtn.style.display = "none";
+        forgotBtn.style.display = "none";
+      } else {
+        status.textContent = "Guest mode";
+        logoutBtn.style.display = "none";
+        loginBtn.style.display = "inline-flex";
+        registerBtn.style.display = "inline-flex";
+        forgotBtn.style.display = "inline-flex";
+      }
+    }
+
+    bar.__owSyncAuthUi = syncAuthUi;
+    syncAuthUi();
+
+    return bar;
+  }
+
+  async function authJson(path, payload) {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+
+    const text = await res.text().catch(() => "");
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { detail: text }; }
+
+    if (!res.ok) {
+      const msg = data?.detail || data?.message || `Auth error (${res.status})`;
+      throw new Error(msg);
+    }
+    return data;
+  }
+
+  async function authRegister(email, password) {
+    return authJson("/api/v1/auth/register", { email, password });
+  }
+  async function authLogin(email, password) {
+    return authJson("/api/v1/auth/login", { email, password });
+  }
+  async function authForgot(email) {
+    return authJson("/api/v1/auth/forgot", { email });
+  }
+
   // ---------------------------------
   // Workbench: backend merge
   // ---------------------------------
 
   const API_BASE = "https://autoweave-backend.onrender.com";
+
+  // Auth bar (Login / Register / Forgot password)
+  ensureAuthBar();
 
   const projectsFile = document.getElementById("projectsFile");
   const incomesFile = document.getElementById("incomesFile");
@@ -1407,8 +1740,10 @@
     try {
       setStatus("Processing…");
 
+      const token = getAuthToken();
       const res = await fetch(`${API_BASE}/api/v1/merge/autotrac`, {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: form,
       });
 
