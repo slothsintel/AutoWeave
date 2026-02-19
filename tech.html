@@ -10,6 +10,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    // NO trailing slash
+    window.AUTOWEAVE_API_BASE = "https://autoweave-backend.onrender.com";
+  </script>
 </head>
 
 <body class="sloths-page">
@@ -331,10 +335,7 @@
         if (!clickedInsidePanel && !clickedToggle) closeNav();
       });
     </script>
-    <script>
-      // NO trailing slash
-      window.AUTOWEAVE_API_BASE = "https://autoweave-backend.onrender.com";
-    </script>
+
     <script src="./script.js"></script>
   </main>
 </body>

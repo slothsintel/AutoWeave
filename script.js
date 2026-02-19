@@ -11,17 +11,10 @@
   // =========================================================
   // 0) Config
   // =========================================================
-  const API_BASE = (() => {
-    // Prefer explicit global, then meta tag, then same-origin.
-    // You can set window.AUTOWEAVE_API_BASE = "https://your-backend"
-    if (typeof window !== "undefined" && window.AUTOWEAVE_API_BASE) return String(window.AUTOWEAVE_API_BASE).replace(/\/+$/, "");
-    const meta = document.querySelector('meta[name="autoweave-api-base"]');
-    if (meta && meta.content) return String(meta.content).replace(/\/+$/, "");
-    return "";
-  })();
-
+  const API_BASE = "https://autoweave-backend.onrender.com";
   const AUTH_STORAGE_KEY = "ow_auth_token";
   const AUTH_EMAIL_KEY = "ow_auth_email";
+  console.log("AUTOWEAVE API_BASE =", API_BASE, "global =", window.AUTOWEAVE_API_BASE);
 
   // =========================================================
   // 1) Utilities
@@ -1017,7 +1010,7 @@
       if (projects) form.append("projects_csv", projects);
 
       try {
-        const res = await apiFetch("/api/v1/merge", {
+        const res = await apiFetch("/api/v1/merge/autotrac", {
           method: "POST",
           body: form,
         });
