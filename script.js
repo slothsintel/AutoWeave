@@ -1189,7 +1189,8 @@
     if (!workbench) return null;
 
     const existing = workbench.parentElement?.querySelector("#owAuthBar");
-    if (existing) return existing;
+    if (existing) { try { existing.remove(); } catch (e) {} }
+
 
     const bar = document.createElement("div");
     bar.id = "owAuthBar";
