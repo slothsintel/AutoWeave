@@ -554,7 +554,7 @@
     const hint = document.createElement("span");
     hint.style.fontSize = "0.95rem";
     hint.style.color = "rgba(15,31,23,0.62)";
-    hint.textContent = "Sign in to merge via backend.";
+    hint.textContent = "Sign in to securely weave your data.";
 
     left.appendChild(status);
     left.appendChild(hint);
