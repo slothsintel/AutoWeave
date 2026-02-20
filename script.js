@@ -11,7 +11,8 @@
   // =========================================================
   // 0) Config
   // =========================================================
-  const API_BASE = "https://autoweave-backend.onrender.com";
+  // Prefer tech.html override if present
+  const API_BASE = (window.AUTOWEAVE_API_BASE && String(window.AUTOWEAVE_API_BASE).trim()) || "https://autoweave-backend.onrender.com";
   const AUTH_STORAGE_KEY = "ow_auth_token";
   const AUTH_EMAIL_KEY = "ow_auth_email";
   console.log("AUTOWEAVE API_BASE =", API_BASE, "global =", window.AUTOWEAVE_API_BASE);
@@ -37,7 +38,6 @@
   function fmtMoney(n) {
     const x = Number(n);
     if (!Number.isFinite(x)) return "0";
-    // Keep compact and readable
     return x.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
 
@@ -58,7 +58,6 @@
   }
 
   function isoDate(d) {
-    // yyyy-mm-dd
     const dt = (d instanceof Date) ? d : new Date(d);
     if (Number.isNaN(dt.getTime())) return "";
     const y = dt.getFullYear();
@@ -71,7 +70,6 @@
     if (!s) return null;
     const dt = new Date(s);
     if (!Number.isNaN(dt.getTime())) return dt;
-    // try dd/mm/yyyy
     const m = String(s).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (m) {
       const dd = Number(m[1]);
@@ -225,6 +223,15 @@
     return res.json();
   }
 
+  // NEW: delete account (soft delete on backend)
+  async function authDeleteAccount(password) {
+    const res = await apiFetch("/api/v1/auth/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ password, confirm: "DELETE" }),
+    });
+    return res.json();
+  }
+
   // =========================================================
   // 3) Visualisation helpers (lightweight stacked bars)
   // =========================================================
@@ -276,6 +283,14 @@
     btn.style.userSelect = "none";
   }
 
+  // NEW: danger look (still consistent with pill system)
+  function stylePillDanger(btn) {
+    stylePillButton(btn);
+    btn.style.border = "1px solid rgba(185, 28, 28, 0.35)";
+    btn.style.background = "rgba(220, 38, 38, 0.08)";
+    btn.style.color = "rgba(185, 28, 28, 0.95)";
+  }
+
   function setPillActive(btn, active) {
     if (active) {
       btn.style.background = "rgba(15,31,23,0.92)";
@@ -292,9 +307,7 @@
     while (el && el.firstChild) el.removeChild(el.firstChild);
   }
 
-  // A simple stacked bar chart renderer using divs (no external libs)
   function renderStackedBars(container, data, projectNames, valueKey, title) {
-    // data: [{ key: "2026-01-01", values: {ProjectA: 10, ProjectB: 3}, total: 13 }, ...]
     clearEl(container);
 
     const header = createEl("div", { className: "aw-vis-header" }, [
@@ -330,7 +343,6 @@
       bar.style.border = "1px solid rgba(15,31,23,0.10)";
       bar.title = `${d.key}\nTotal: ${fmtMoney(d.total)}`;
 
-      // stack segments
       for (const p of projectNames) {
         const v = Number(d.values?.[p]) || 0;
         if (v <= 0) continue;
@@ -363,7 +375,6 @@
   // 4) Parse merged CSV stats for visuals
   // =========================================================
   function parseCsv(text) {
-    // minimal CSV parser (handles quotes)
     const rows = [];
     let row = [];
     let cur = "";
@@ -423,8 +434,6 @@
   }
 
   function normalizeMergedRow(obj) {
-    // Try best-effort mapping based on expected backend output
-    // Typical columns: work_date, project, income, duration_hours
     const project = String(obj.project || obj.Project || obj.PROJECT || "").trim();
     const dateRaw = obj.work_date || obj.date || obj.workDate || obj.workDateISO || obj.workdate || "";
     const d = parseDateish(dateRaw);
@@ -437,12 +446,10 @@
   }
 
   function buildDailyProjectSeries(objs, group = "day") {
-    // group: day|week|month
     const rows = objs
       .map(normalizeMergedRow)
       .filter(r => r.project && r.work_date);
 
-    // define key based on grouping
     function keyForDate(iso) {
       const d = parseDateish(iso);
       if (!d) return iso;
@@ -450,15 +457,13 @@
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       }
       if (group === "week") {
-        // ISO week-ish: year-Www
-        // simple: start-of-week Monday
         const dt = new Date(d);
         const day = (dt.getDay() + 6) % 7; // Monday=0
         dt.setDate(dt.getDate() - day);
         const y = dt.getFullYear();
         const m = String(dt.getMonth() + 1).padStart(2, "0");
         const dd = String(dt.getDate()).padStart(2, "0");
-        return `${y}-W${m}${dd}`; // stable key for display
+        return `${y}-W${m}${dd}`;
       }
       return isoDate(d);
     }
@@ -476,7 +481,6 @@
       rec.totalHours += r.duration;
     }
 
-    // ratio per project per bucket
     for (const rec of byKey.values()) {
       for (const p of projectNames) {
         const inc = Number(rec.valuesIncome[p] || 0);
@@ -487,7 +491,6 @@
     }
 
     const sorted = Array.from(byKey.values()).sort((a, b) => String(a.key).localeCompare(String(b.key)));
-
     return { projectNames, buckets: sorted };
   }
 
@@ -500,7 +503,6 @@
 
     const existing = workbench.parentElement?.querySelector("#owAuthBar");
     if (existing) { try { existing.remove(); } catch (e) {} }
-
 
     const bar = document.createElement("div");
     bar.id = "owAuthBar";
@@ -551,6 +553,12 @@
     stylePillButton(btnLogout);
     btnLogout.textContent = "Logout";
 
+    // NEW: delete account button (danger)
+    const btnDelete = document.createElement("button");
+    btnDelete.type = "button";
+    stylePillDanger(btnDelete);
+    btnDelete.textContent = "Delete account";
+
     const hint = document.createElement("span");
     hint.style.fontSize = "0.95rem";
     hint.style.color = "rgba(15,31,23,0.62)";
@@ -563,14 +571,14 @@
     right.appendChild(btnRegister);
     right.appendChild(btnForgot);
     right.appendChild(btnLogout);
+    right.appendChild(btnDelete);
 
     bar.appendChild(left);
     bar.appendChild(right);
 
-    // Insert bar above workbench
     workbench.parentElement?.insertBefore(bar, workbench);
 
-    // Modal (minimal, local)
+    // Modal
     const modal = document.createElement("div");
     modal.id = "owAuthModal";
     modal.style.position = "fixed";
@@ -662,7 +670,6 @@
       password.style.padding = "0 12px";
       password.style.marginBottom = "10px";
       password.style.background = "white";
-      if (mode === "forgot" || mode === "verify") password.style.display = "none";
 
       const password2 = document.createElement("input");
       password2.type = "password";
@@ -674,7 +681,17 @@
       password2.style.padding = "0 12px";
       password2.style.marginBottom = "10px";
       password2.style.background = "white";
-      if (mode !== "register" && mode !== "reset") password2.style.display = "none";
+
+      const confirmText = document.createElement("input");
+      confirmText.type = "text";
+      confirmText.placeholder = 'Type DELETE to confirm';
+      confirmText.style.width = "100%";
+      confirmText.style.height = "42px";
+      confirmText.style.borderRadius = "12px";
+      confirmText.style.border = "1px solid rgba(15,31,23,0.14)";
+      confirmText.style.padding = "0 12px";
+      confirmText.style.marginBottom = "10px";
+      confirmText.style.background = "white";
 
       const action = document.createElement("button");
       action.type = "button";
@@ -693,29 +710,56 @@
       resend.textContent = "Resend verification link";
       resend.style.display = "none";
 
+      // Mode setup
       if (mode === "login") {
         title.textContent = "Login";
         action.textContent = "Login";
         msg.textContent = "Tip: verify your email first (check inbox).";
+        password2.style.display = "none";
+        confirmText.style.display = "none";
       } else if (mode === "register") {
         title.textContent = "Register";
         action.textContent = "Create account";
         msg.textContent = "We’ll email you a verification link.";
+        confirmText.style.display = "none";
       } else if (mode === "forgot") {
         title.textContent = "Forgot password";
         action.textContent = "Send reset link";
         msg.textContent = "We’ll email you a reset link (if the account exists).";
+        password.style.display = "none";
+        password2.style.display = "none";
+        confirmText.style.display = "none";
         resend.style.display = "inline-flex";
       } else if (mode === "reset") {
         title.textContent = "Reset password";
         action.textContent = "Set new password";
         msg.textContent = "Choose a new password (min 8 characters).";
-      } else {
+        confirmText.style.display = "none";
+      } else if (mode === "verify") {
         title.textContent = "Verify email";
         action.textContent = "Verify email";
         msg.textContent = "Confirming your email.";
+        password.style.display = "none";
+        password2.style.display = "none";
+        confirmText.style.display = "none";
+      } else if (mode === "delete") {
+        title.textContent = "Delete account";
+        stylePillDanger(action);
+        action.style.height = "42px";
+        action.style.width = "100%";
+        action.style.justifyContent = "center";
+        action.textContent = "DELETE MY ACCOUNT";
+        msg.textContent = "This action cannot be undone. Confirm your password and type DELETE.";
+        // email is shown but locked (for clarity)
+        email.disabled = true;
+        password2.style.display = "none";
+      } else {
+        title.textContent = "Account";
+        password2.style.display = "none";
+        confirmText.style.display = "none";
       }
 
+      // Body layout
       if (mode === "verify") {
         const note = document.createElement("div");
         note.style.fontSize = "0.95rem";
@@ -725,6 +769,11 @@
         body.appendChild(note);
         if (opts.email) body.appendChild(email);
         body.appendChild(action);
+      } else if (mode === "delete") {
+        body.appendChild(email);
+        body.appendChild(password);
+        body.appendChild(confirmText);
+        body.appendChild(action);
       } else {
         body.appendChild(email);
         body.appendChild(password);
@@ -733,7 +782,7 @@
         if (mode === "forgot") body.appendChild(resend);
       }
 
-      // ✅ Resend handler must be inside openModal (resend is scoped here)
+      // Resend handler (scoped)
       resend.addEventListener("click", async () => {
         const em = email.value.trim();
         if (!em) {
@@ -774,6 +823,7 @@
             msg.textContent = "Logged in ✔";
             syncAuthUi();
             setTimeout(closeModal, 450);
+
           } else if (mode === "register") {
             if (!pw || pw.length < 8) {
               msg.textContent = "Password must be at least 8 characters.";
@@ -786,9 +836,11 @@
             await authRegister(em, pw);
             msg.textContent = "Account created ✔ Check your email to verify.";
             setTimeout(closeModal, 700);
+
           } else if (mode === "forgot") {
             await authForgot(em);
             msg.textContent = "If that email exists, a reset link has been sent.";
+
           } else if (mode === "reset") {
             if (!linkToken) {
               msg.textContent = "Reset token missing. Please open the link from your email again.";
@@ -809,8 +861,8 @@
               closeModal();
               openModal("login", { email: em });
             }, 650);
-          } else {
-            // verify
+
+          } else if (mode === "verify") {
             if (!opts.email || !linkToken) {
               msg.textContent = "Verification link incomplete. Please open the link from your email again.";
               return;
@@ -822,12 +874,34 @@
               closeModal();
               openModal("login", { email: opts.email });
             }, 650);
+
+          } else if (mode === "delete") {
+            const c = String(confirmText.value || "").trim().toUpperCase();
+            if (c !== "DELETE") {
+              msg.textContent = 'Please type "DELETE" to confirm.';
+              return;
+            }
+            if (!pw) {
+              msg.textContent = "Please enter your password.";
+              return;
+            }
+
+            await authDeleteAccount(pw);
+
+            // Clear session
+            clearAuthToken();
+            syncAuthUi();
+
+            msg.textContent = "Account deleted ✔";
+            setTimeout(closeModal, 650);
+
+          } else {
+            msg.textContent = "Unknown action.";
           }
         } catch (e) {
           const emsg = e?.message ? String(e.message) : String(e);
           msg.textContent = emsg;
 
-          // If the backend says email is unverified, offer resend link
           if (mode === "login" && /verify|verification/i.test(emsg)) {
             resend.style.display = "inline-flex";
           }
@@ -837,7 +911,6 @@
         }
       });
 
-      // Auto-run verification when opened from a link
       if (mode === "verify" && opts.token && opts.email) {
         setTimeout(() => action.click(), 50);
       }
@@ -863,6 +936,7 @@
       btnRegister.style.display = authed ? "none" : "inline-flex";
       btnForgot.style.display = authed ? "none" : "inline-flex";
       btnLogout.style.display = authed ? "inline-flex" : "none";
+      btnDelete.style.display = authed ? "inline-flex" : "none";
 
       hint.style.display = authed ? "none" : "inline";
     }
@@ -875,9 +949,13 @@
       syncAuthUi();
     });
 
-    // Handle verify/reset links in URL:
-    // ?mode=verify&email=...&token=...
-    // ?mode=reset&email=...&token=...
+    // NEW: open delete modal (requires being logged in)
+    btnDelete.addEventListener("click", () => {
+      const em = getAuthEmail();
+      if (!getAuthToken()) return;
+      openModal("delete", { email: em, lockEmail: true });
+    });
+
     function handleAuthLinkFromUrl() {
       const url = new URL(window.location.href);
       const mode = url.searchParams.get("mode") || "";
@@ -912,12 +990,12 @@
     const previewMerged = document.getElementById("previewMerged");
     const statsMerged = document.getElementById("statsMerged");
     const downloadBtn = document.getElementById("downloadBtn");
-  function setBoxText(el, txt) {
-    if (!el) return;
-    if (typeof el.value === "string") el.value = txt;
-    else el.textContent = txt;
-  }
 
+    function setBoxText(el, txt) {
+      if (!el) return;
+      if (typeof el.value === "string") el.value = txt;
+      else el.textContent = txt;
+    }
 
     if (!incomesFile || !entriesFile ||
         !runMergeBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
@@ -969,14 +1047,12 @@
       setStatus("");
 
       downloadBtn.style.display = "none";
-
       downloadBtn.removeAttribute("href");
       clearVisuals();
     }
 
     resetAllBtn?.addEventListener("click", resetAll);
 
-    // Grouping control (re-render visuals if preview exists)
     const groupSel = document.getElementById("groupBySel");
     if (groupSel) {
       groupSel.addEventListener("change", () => {
@@ -985,7 +1061,6 @@
       });
     }
 
-    // Merge action: call backend
     runMergeBtn.addEventListener("click", async () => {
       const entries = entriesFile.files?.[0];
       const incomes = incomesFile.files?.[0];
@@ -1025,11 +1100,9 @@
           return;
         }
 
-        // Show preview and download
         const csv = data.download_csv;
         setBoxText(previewMerged, csv);
 
-        // Build a blob download link
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         downloadBtn.href = url;
@@ -1037,8 +1110,6 @@
         downloadBtn.style.display = "inline-flex";
 
         setStatus("Merge complete ✔");
-
-        // Render visuals
         renderVisualsFromMergedCsv(csv);
 
       } catch (e) {
