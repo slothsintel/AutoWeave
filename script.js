@@ -905,7 +905,7 @@
     const incomesFile = document.getElementById("incomesFile");
     const entriesFile = document.getElementById("entriesFile");
     const projectsFile = document.getElementById("projectsFile");
-    const mergeBtn = document.getElementById("mergeBtn");
+    const runMergeBtn = document.getElementById("runMergeBtn");
     const resetAllBtn = document.getElementById("resetAllBtn");
 
     const statusBox = document.getElementById("statusBox");
@@ -920,7 +920,7 @@
 
 
     if (!incomesFile || !entriesFile ||
-        !mergeBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
+        !runMergeBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
       return;
     }
 
@@ -986,7 +986,7 @@
     }
 
     // Merge action: call backend
-    mergeBtn.addEventListener("click", async () => {
+    runMergeBtn.addEventListener("click", async () => {
       const entries = entriesFile.files?.[0];
       const incomes = incomesFile.files?.[0];
       const projects = projectsFile?.files?.[0] || null;
@@ -1052,7 +1052,7 @@
   // 7) Guided local preview (single CSV)
   // =========================================================
   function initGuidedExample() {
-    const fileInput = document.getElementById("guidedCsvFile");
+    const fileInput = document.getElementById("guidedFileInput");
     const preview = document.getElementById("guidedPreview");
     if (!fileInput || !preview) return;
 
