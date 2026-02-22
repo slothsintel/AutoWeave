@@ -283,10 +283,10 @@
   }
 
   // NEW: delete account (soft delete on backend)
-  async function authDeleteAccount(email, password) {
+  async function authDeleteAccount(email, password, confirm) {
     const res = await apiFetch("/api/v1/auth/delete-account", {
       method: "POST",
-      body: JSON.stringify({ email, password, confirm: "DELETE" }),
+      body: JSON.stringify({ email, password, confirm }),
     });
     return res.json();
   }
@@ -956,7 +956,27 @@
               return;
             }
 
-            await authDeleteAccount(emailInput.value, passwordInput.value);
+            const deleteEmailInput = document.getElementById("delete-email");
+            const deletePasswordInput = document.getElementById("delete-password");
+            const deleteConfirmInput = document.getElementById("delete-confirm");
+
+            deleteForm.addEventListener("submit", async (e) => {
+              e.preventDefault();
+
+              try {
+                const email = deleteEmailInput.value.trim();
+                const password = deletePasswordInput.value;
+                const confirm = deleteConfirmInput.value;
+
+                await authDeleteAccount(email, password, confirm);
+
+                alert("Account deleted.");
+                clearAuthToken();
+                location.reload();
+              } catch (err) {
+                deleteError.textContent = err.message || "Delete failed";
+              }
+            });
 
             // Clear session
             clearAuthToken();
