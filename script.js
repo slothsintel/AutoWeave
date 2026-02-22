@@ -192,6 +192,9 @@
     // ✅ Always send Bearer <JWT> (cleaned)
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
+    console.log("apiFetch token length =", (token || "").length);
+    console.log("apiFetch token preview =", (token || "").slice(0, 20));
+
     const res = await fetch(apiUrl(path), { ...options, headers });
 
     if (!res.ok) {
