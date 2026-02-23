@@ -1141,6 +1141,63 @@
       statusBox.textContent = text || "";
     }
 
+
+
+// ---------------------------------------------------------
+// Auto-load sample CSVs (static demo) if user hasn't uploaded files
+// ---------------------------------------------------------
+async function fetchAsFile(url, filename) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to load sample: ${url} (${res.status})`);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: "text/csv" });
+}
+
+function setInputFile(inputEl, file) {
+  if (!inputEl || !file) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  inputEl.files = dt.files;
+}
+
+async function maybeLoadDefaultSamples() {
+  // Only load if the user hasn't picked anything yet
+  const hasEntries = entriesFile?.files && entriesFile.files.length > 0;
+  const hasIncomes = incomesFile?.files && incomesFile.files.length > 0;
+  const hasProjects = projectsFile?.files && projectsFile.files.length > 0;
+
+  // Require the 2 required inputs; projects is optional
+  if (hasEntries && hasIncomes) return;
+
+  try {
+    setStatus("Loading sample files…");
+
+    const [entriesF, incomesF] = await Promise.all([
+      hasEntries ? null : fetchAsFile("assets/technology/time_sample.csv", "time_sample.csv"),
+      hasIncomes ? null : fetchAsFile("assets/technology/income_sample.csv", "income_sample.csv"),
+    ]);
+
+    if (entriesF) setInputFile(entriesFile, entriesF);
+    if (incomesF) setInputFile(incomesFile, incomesF);
+
+    // Optional projects sample
+    if (projectsFile && !hasProjects) {
+      try {
+        const projectsF = await fetchAsFile("assets/technology/project_sample.csv", "project_sample.csv");
+        setInputFile(projectsFile, projectsF);
+      } catch (e) {
+        // Optional; ignore if missing
+      }
+    }
+
+    setStatus("Sample files loaded ✔ (upload your own to replace them)");
+  } catch (e) {
+    // Don't block the app if samples fail to load
+    setStatus("");
+    console.warn("Sample auto-load failed:", e);
+  }
+}
+
     function clearVisuals() {
       const visIncome = document.getElementById("visIncome");
       const visDuration = document.getElementById("visDuration");
@@ -1252,6 +1309,10 @@
       }
     });
   }
+
+
+    // Auto-load samples on page load if no user files selected
+    maybeLoadDefaultSamples();
 
   // =========================================================
   // 7) Guided local preview (single CSV)
