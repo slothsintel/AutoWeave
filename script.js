@@ -956,35 +956,16 @@
               return;
             }
 
-            const deleteEmailInput = document.getElementById("delete-email");
-            const deletePasswordInput = document.getElementById("delete-password");
-            const deleteConfirmInput = document.getElementById("delete-confirm");
+            // Call backend delete endpoint directly (no form needed)
+            await authDeleteAccount(em, pw, c);
 
-            deleteForm.addEventListener("submit", async (e) => {
-              e.preventDefault();
-
-              try {
-                const email = deleteEmailInput.value.trim();
-                const password = deletePasswordInput.value;
-                const confirm = deleteConfirmInput.value;
-
-                await authDeleteAccount(email, password, confirm);
-
-                alert("Account deleted.");
-                clearAuthToken();
-                location.reload();
-              } catch (err) {
-                deleteError.textContent = err.message || "Delete failed";
-              }
-            });
-
-            // Clear session
+            // Clear session + refresh UI
             clearAuthToken();
             syncAuthUi();
 
             msg.textContent = "Account deleted ✔";
-            setTimeout(closeModal, 650);
-
+            // Optional: reload so any cached UI/state resets
+            setTimeout(() => location.reload(), 650);
           } else {
             msg.textContent = "Unknown action.";
           }
