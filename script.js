@@ -1145,6 +1145,8 @@
 
 // ---------------------------------------------------------
 // Auto-load sample CSVs (static demo) if user hasn't uploaded files
+// - Works on GitHub Pages even when tech.html is in a subfolder
+// - Also auto-runs merge once samples are loaded (so the "See" panel isn't empty)
 // ---------------------------------------------------------
 async function fetchAsFile(url, filename) {
   const res = await fetch(url, { cache: "no-store" });
@@ -1160,159 +1162,79 @@ function setInputFile(inputEl, file) {
   inputEl.files = dt.files;
 }
 
+async function tryFetchSample(filename, logicalName) {
+  // Try a few common paths:
+  // 1) Relative to current page
+  // 2) Absolute from site root
+  // 3) Relative to this script's directory (best for pages in subfolders)
+  const scriptUrl = (document.currentScript && document.currentScript.src) ? new URL(document.currentScript.src, document.baseURI) : null;
+  const scriptDir = scriptUrl ? scriptUrl.href.substring(0, scriptUrl.href.lastIndexOf("/") + 1) : "";
+  const candidates = [
+    `assets/technology/${filename}`,
+    `/assets/technology/${filename}`,
+    `${scriptDir}assets/technology/${filename}`,
+    `${scriptDir}../assets/technology/${filename}`,
+  ];
+
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const f = await fetchAsFile(url, filename);
+      return f;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(`Could not load ${logicalName} sample. Checked: ${candidates.join(", ")}. Last error: ${lastErr && lastErr.message ? lastErr.message : lastErr}`);
+}
+
 async function maybeLoadDefaultSamples() {
   // Only load if the user hasn't picked anything yet
   const hasEntries = entriesFile?.files && entriesFile.files.length > 0;
   const hasIncomes = incomesFile?.files && incomesFile.files.length > 0;
   const hasProjects = projectsFile?.files && projectsFile.files.length > 0;
 
-  // Require the 2 required inputs; projects is optional
+  // If user already provided both required inputs, do nothing
   if (hasEntries && hasIncomes) return;
 
   try {
     setStatus("Loading sample files…");
 
     const [entriesF, incomesF] = await Promise.all([
-      hasEntries ? null : fetchAsFile("assets/technology/time_sample.csv", "time_sample.csv"),
-      hasIncomes ? null : fetchAsFile("assets/technology/income_sample.csv", "income_sample.csv"),
+      hasEntries ? null : tryFetchSample("time_sample.csv", "Time"),
+      hasIncomes ? null : tryFetchSample("income_sample.csv", "Income"),
     ]);
 
     if (entriesF) setInputFile(entriesFile, entriesF);
     if (incomesF) setInputFile(incomesFile, incomesF);
 
-    // Optional projects sample
+    // Optional projects sample (ignore if missing)
     if (projectsFile && !hasProjects) {
       try {
-        const projectsF = await fetchAsFile("assets/technology/project_sample.csv", "project_sample.csv");
+        const projectsF = await tryFetchSample("project_sample.csv", "Project");
         setInputFile(projectsFile, projectsF);
       } catch (e) {
-        // Optional; ignore if missing
+        // optional
       }
     }
 
-    setStatus("Sample files loaded ✔ (upload your own to replace them)");
+    setStatus("Sample files loaded ✔");
+
+    // Auto-run merge so the "See" panel is populated.
+    // (If the user later uploads their own files, they can re-run merge normally.)
+    if (runMergeBtn && !runMergeBtn.disabled) {
+      runMergeBtn.click();
+    }
   } catch (e) {
     // Don't block the app if samples fail to load
-    setStatus("");
+    const msg = (e && e.message) ? e.message : String(e);
+    setStatus(`Sample auto-load failed: ${msg}`);
     console.warn("Sample auto-load failed:", e);
   }
 }
 
-    function clearVisuals() {
-      const visIncome = document.getElementById("visIncome");
-      const visDuration = document.getElementById("visDuration");
-      const visRatio = document.getElementById("visRatio");
-      if (visIncome) clearEl(visIncome);
-      if (visDuration) clearEl(visDuration);
-      if (visRatio) clearEl(visRatio);
-    }
-
-    function renderVisualsFromMergedCsv(csvText) {
-      const rows = parseCsv(csvText);
-      const objs = rowsToObjects(rows);
-      const groupSel = document.getElementById("groupBySel");
-      const group = groupSel ? String(groupSel.value || "day") : "day";
-
-      const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
-
-      const visIncome = document.getElementById("visIncome");
-      const visDuration = document.getElementById("visDuration");
-      const visRatio = document.getElementById("visRatio");
-      if (!visIncome || !visDuration || !visRatio) return;
-
-      const incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
-      const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
-      const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
-
-      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
-      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
-      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
-    }
-
-    function resetAll() {
-      if (projectsFile) projectsFile.value = "";
-      incomesFile.value = "";
-      entriesFile.value = "";
-
-      setBoxText(previewMerged, "");
-      setBoxText(statsMerged, "");
-      setStatus("");
-
-      downloadBtn.style.display = "none";
-      downloadBtn.removeAttribute("href");
-      clearVisuals();
-    }
-
-    resetAllBtn?.addEventListener("click", resetAll);
-
-    const groupSel = document.getElementById("groupBySel");
-    if (groupSel) {
-      groupSel.addEventListener("change", () => {
-        const txt = (typeof previewMerged.value === "string") ? previewMerged.value : previewMerged.textContent;
-        if (txt) renderVisualsFromMergedCsv(txt);
-      });
-    }
-
-    runMergeBtn.addEventListener("click", async () => {
-      const entries = entriesFile.files?.[0];
-      const incomes = incomesFile.files?.[0];
-      const projects = projectsFile?.files?.[0] || null;
-
-      if (!entries || !incomes) {
-        setStatus("Please upload both Time entries and Incomes CSVs.");
-        return;
-      }
-
-      downloadBtn.style.display = "none";
-      downloadBtn.removeAttribute("href");
-      setBoxText(previewMerged, "");
-      setBoxText(statsMerged, "");
-      clearVisuals();
-
-      setStatus("Uploading files…");
-
-      const form = new FormData();
-      form.append("time_entries_csv", entries);
-      form.append("incomes_csv", incomes);
-      if (projects) form.append("projects_csv", projects);
-
-      try {
-        const res = await apiFetch("/api/v1/merge/autotrac", {
-          method: "POST",
-          body: form,
-        });
-
-        const data = await res.json();
-        const hasCsv = typeof data.download_csv === "string" && data.download_csv.length > 0;
-        if (!hasCsv) {
-          setStatus(`No output CSV returned.`);
-          return;
-        }
-
-        const csv = data.download_csv;
-        setBoxText(previewMerged, csv);
-
-        setBoxText(statsMerged, buildQuickStatsTextFromMergedCsv(csv));
-
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        downloadBtn.href = url;
-        downloadBtn.download = "merged.csv";
-        downloadBtn.style.display = "inline-flex";
-
-        setStatus("Merge complete ✔");
-        renderVisualsFromMergedCsv(csv);
-
-      } catch (e) {
-        const msg = e?.message ? String(e.message) : String(e);
-        setStatus(`Error: ${msg}`);
-      }
-    });
-  }
-
-
-    // Auto-load samples on page load if no user files selected
-    maybeLoadDefaultSamples();
+// Auto-load samples on page load if no user files selected
+maybeLoadDefaultSamples();
 
   // =========================================================
   // 7) Guided local preview (single CSV)
