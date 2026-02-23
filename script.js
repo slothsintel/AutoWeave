@@ -375,33 +375,6 @@
 
     container.appendChild(header);
 
-    // Legend (projects)
-    const legend = createEl("div");
-    legend.style.display = "flex";
-    legend.style.flexWrap = "wrap";
-    legend.style.gap = "0.5rem 0.8rem";
-    legend.style.alignItems = "center";
-    legend.style.margin = "0.25rem 0 0.75rem";
-    for (let i = 0; i < projectNames.length; i++) {
-      const name = projectNames[i];
-      const item = createEl("div");
-      item.style.display = "inline-flex";
-      item.style.alignItems = "center";
-      item.style.gap = "0.45rem";
-      const dot = createEl("span");
-      dot.style.width = "10px";
-      dot.style.height = "10px";
-      dot.style.borderRadius = "9999px";
-      dot.style.background = colorForProject(name);
-      const lab = createEl("span", { textContent: name });
-      lab.style.fontSize = "0.85rem";
-      lab.style.color = "var(--muted)";
-      item.appendChild(dot);
-      item.appendChild(lab);
-      legend.appendChild(item);
-    }
-    container.appendChild(legend);
-
     const chart = createEl("div", { className: "aw-stacked-chart" });
     chart.style.display = "grid";
     chart.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
@@ -566,69 +539,6 @@
       lines.push(`${name}\t£${fmtMoney(rec.income)}\t${fmtHours(rec.hours)}\t£${fmtRatio(pRatio)}`);
     }
 
-    // Also populate the quick-stats tables (if present)
-    try {
-      const sumBody = document.getElementById("qsSummaryBody");
-      const projBody = document.getElementById("qsProjectBody");
-      if (sumBody) {
-        sumBody.innerHTML = "";
-        const rows = [
-          ["Row count", String(normalized.length)],
-          ["Total income", `£${fmtMoney(totalIncome)}`],
-          ["Total duration", `${fmtHours(totalHours)}`],
-          ["Income / hour", `£${fmtRatio(ratio)}`],
-        ];
-        for (const [k,v] of rows) {
-          const tr = document.createElement("tr");
-          const td1 = document.createElement("td");
-          const td2 = document.createElement("td");
-          td1.textContent = k;
-          td2.textContent = v;
-          td1.style.padding = "0.55rem 0.75rem";
-          td2.style.padding = "0.55rem 0.75rem";
-          td1.style.borderBottom = "1px solid rgba(15,31,23,0.08)";
-          td2.style.borderBottom = "1px solid rgba(15,31,23,0.08)";
-          td2.style.textAlign = "right";
-          td2.style.fontWeight = "800";
-          tr.appendChild(td1);
-          tr.appendChild(td2);
-          sumBody.appendChild(tr);
-        }
-      }
-
-      if (projBody) {
-        projBody.innerHTML = "";
-        const projectsSorted = Array.from(byProject.entries())
-          .sort((a, b) => (b[1].income - a[1].income) || (b[1].hours - a[1].hours) || a[0].localeCompare(b[0]));
-        for (const [name, rec] of projectsSorted) {
-          const pRatio = rec.hours > 0 ? (rec.income / rec.hours) : 0;
-          const tr = document.createElement("tr");
-          const tdn = document.createElement("td");
-          const tdi = document.createElement("td");
-          const tdh = document.createElement("td");
-          const tdr = document.createElement("td");
-          tdn.textContent = name;
-          tdi.textContent = `£${fmtMoney(rec.income)}`;
-          tdh.textContent = `${fmtHours(rec.hours)}`;
-          tdr.textContent = `£${fmtRatio(pRatio)}`;
-          for (const td of [tdn, tdi, tdh, tdr]) {
-            td.style.padding = "0.55rem 0.75rem";
-            td.style.borderBottom = "1px solid rgba(15,31,23,0.08)";
-          }
-          tdi.style.textAlign = "right";
-          tdh.style.textAlign = "right";
-          tdr.style.textAlign = "right";
-          tr.appendChild(tdn);
-          tr.appendChild(tdi);
-          tr.appendChild(tdh);
-          tr.appendChild(tdr);
-          projBody.appendChild(tr);
-        }
-      }
-    } catch (e) {
-      // ignore
-    }
-
     return lines.join("\n");
   }
 
@@ -641,9 +551,6 @@
     function keyForDate(iso) {
       const d = parseDateish(iso);
       if (!d) return iso;
-      if (group === "year") {
-        return `${d.getFullYear()}`;
-      }
       if (group === "month") {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       }
@@ -1246,100 +1153,10 @@
     function renderVisualsFromMergedCsv(csvText) {
       const rows = parseCsv(csvText);
       const objs = rowsToObjects(rows);
-
-      // --- Read UI state (falls back safely) ---
       const groupSel = document.getElementById("groupBySel");
       const group = groupSel ? String(groupSel.value || "day") : "day";
 
-      const activeRangeBtn = document.querySelector('.aw-pill.is-active[data-range]');
-      const range = activeRangeBtn ? String(activeRangeBtn.getAttribute("data-range") || "14") : "14";
-
-      const fromEl = document.getElementById("rangeFrom");
-      const toEl = document.getElementById("rangeTo");
-      const fromStr = fromEl && fromEl.value ? String(fromEl.value) : "";
-      const toStr = toEl && toEl.value ? String(toEl.value) : "";
-
-      const modeBtn = document.querySelector('.aw-pill.is-active[data-mode]');
-      const mode = modeBtn ? String(modeBtn.getAttribute("data-mode") || "cumulative") : "cumulative";
-
-      // --- Normalize + filter ---
-      let normalized = objs
-        .map(normalizeMergedRow)
-        .filter(r => r.project && r.work_date);
-
-      function toIsoDate(s) {
-        // accept YYYY-MM-DD or anything parseable
-        const d = new Date(s);
-        if (Number.isNaN(d.getTime())) return null;
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
-      }
-
-      function isoToTime(iso) {
-        const d = new Date(iso + "T00:00:00");
-        return d.getTime();
-      }
-
-      // range filter
-      if (range !== "all") {
-        const dates = normalized
-          .map(r => toIsoDate(r.work_date))
-          .filter(Boolean)
-          .sort();
-        const maxIso = dates.length ? dates[dates.length - 1] : null;
-
-        let minT = null;
-        let maxT = null;
-
-        if (range === "custom" && fromStr && toStr) {
-          const f = toIsoDate(fromStr);
-          const t = toIsoDate(toStr);
-          if (f && t) {
-            minT = isoToTime(f);
-            maxT = isoToTime(t);
-          }
-        } else if (maxIso) {
-          const days = parseInt(range, 10);
-          if (!Number.isNaN(days)) {
-            maxT = isoToTime(maxIso);
-            minT = maxT - (days - 1) * 24 * 60 * 60 * 1000;
-          }
-        }
-
-        if (minT !== null && maxT !== null) {
-          normalized = normalized.filter(r => {
-            const iso = toIsoDate(r.work_date);
-            if (!iso) return false;
-            const tt = isoToTime(iso);
-            return tt >= minT && tt <= maxT;
-          });
-        }
-      }
-
-      // --- Build series ---
-      const { projectNames, buckets } = buildDailyProjectSeries(normalized, group);
-
-      // cumulative mode
-      if (mode === "cumulative") {
-        const cumIncome = Object.fromEntries(projectNames.map(p => [p, 0]));
-        const cumHours = Object.fromEntries(projectNames.map(p => [p, 0]));
-        const cumRatio = Object.fromEntries(projectNames.map(p => [p, 0]));
-        for (const b of buckets) {
-          for (const p of projectNames) {
-            cumIncome[p] += (b.valuesIncome[p] || 0);
-            cumHours[p] += (b.valuesHours[p] || 0);
-            cumRatio[p] += (b.valuesRatio[p] || 0);
-            b.valuesIncome[p] = cumIncome[p];
-            b.valuesHours[p] = cumHours[p];
-            b.valuesRatio[p] = cumRatio[p];
-          }
-          b.totalIncome = sum(Object.values(b.valuesIncome));
-          b.totalHours = sum(Object.values(b.valuesHours));
-          b.totalRatio = sum(Object.values(b.valuesRatio));
-        }
-      }
+      const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
 
       const visIncome = document.getElementById("visIncome");
       const visDuration = document.getElementById("visDuration");
@@ -1350,10 +1167,12 @@
       const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
       const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
 
-      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Total income by project");
-      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Total duration by project");
-      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / duration by project");
-    }    function resetAll() {
+      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
+      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
+      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
+    }
+
+    function resetAll() {
       if (projectsFile) projectsFile.value = "";
       incomesFile.value = "";
       entriesFile.value = "";
@@ -1376,193 +1195,6 @@
         if (txt) renderVisualsFromMergedCsv(txt);
       });
     }
-
-    // ---------------------------------------------------------
-    // Visualisation controls (pills + custom range + export)
-    // (wired once; only affects stats/visualisations)
-    // ---------------------------------------------------------
-    (function initVisControlsOnce() {
-      const root = document.querySelector('[aria-label="See (preview and visualisation)"]') || document;
-      const exportBtn = document.getElementById("exportPngBtn");
-      const fromEl = document.getElementById("rangeFrom");
-      const toEl = document.getElementById("rangeTo");
-      const customBtn = document.getElementById("rangeCustom");
-
-      function currentMergedCsvText() {
-        return (typeof previewMerged.value === "string") ? previewMerged.value : previewMerged.textContent;
-      }
-
-      function rerender() {
-        const txt = currentMergedCsvText();
-        if (txt) renderVisualsFromMergedCsv(txt);
-      }
-
-      function setRangeUi(range) {
-        const showCustom = range === "custom";
-        if (fromEl) fromEl.style.display = showCustom ? "inline-flex" : "none";
-        if (toEl) toEl.style.display = showCustom ? "inline-flex" : "none";
-      }
-
-      // Range pills
-      root.querySelectorAll('.aw-pill[data-range]').forEach(btn => {
-        btn.addEventListener("click", () => {
-          root.querySelectorAll('.aw-pill[data-range]').forEach(b => b.classList.remove("is-active"));
-          btn.classList.add("is-active");
-          setRangeUi(String(btn.getAttribute("data-range") || "14"));
-          rerender();
-        });
-      });
-
-      // Group pills -> update hidden select
-      root.querySelectorAll('.aw-pill[data-group]').forEach(btn => {
-        btn.addEventListener("click", () => {
-          root.querySelectorAll('.aw-pill[data-group]').forEach(b => b.classList.remove("is-active"));
-          btn.classList.add("is-active");
-          const g = String(btn.getAttribute("data-group") || "day");
-          const sel = document.getElementById("groupBySel");
-          if (sel) sel.value = g;
-          rerender();
-        });
-      });
-
-      // Mode pills (currently only cumulative)
-      root.querySelectorAll('.aw-pill[data-mode]').forEach(btn => {
-        btn.addEventListener("click", () => {
-          root.querySelectorAll('.aw-pill[data-mode]').forEach(b => b.classList.remove("is-active"));
-          btn.classList.add("is-active");
-          rerender();
-        });
-      });
-
-      // Custom date inputs
-      fromEl?.addEventListener("change", rerender);
-      toEl?.addEventListener("change", rerender);
-
-      // Ensure default custom inputs hidden on first load
-      const activeRange = root.querySelector('.aw-pill.is-active[data-range]');
-      setRangeUi(activeRange ? String(activeRange.getAttribute("data-range")) : "14");
-
-      // Export PNG (simple canvas export of the three charts)
-      exportBtn?.addEventListener("click", () => {
-        try {
-          const txt = currentMergedCsvText();
-          if (!txt) return;
-
-          const rows = parseCsv(txt);
-          const objs = rowsToObjects(rows)
-            .map(normalizeMergedRow)
-            .filter(r => r.project && r.work_date);
-
-          // Use current controls to match on-screen view
-          const groupSel = document.getElementById("groupBySel");
-          const group = groupSel ? String(groupSel.value || "day") : "day";
-          const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
-
-          // Build simple PNG: 3 charts stacked
-          const W = 1400, H = 1050;
-          const canvas = document.createElement("canvas");
-          canvas.width = W; canvas.height = H;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-
-          // background
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0,0,W,H);
-
-          function getColor(i){
-            const palette = [
-              "#ff0000","#ff6003","#ffe600","#1eff00","#00ff9d","#71ccc1",
-              "#0400ff","#f700ff","#ff7c7c","#ffb477","#fbfd83","#83ff83"
-            ];
-            return palette[i % palette.length];
-          }
-
-          function drawStacked(title, y0, getterTotal, getterValues){
-            const padL=80, padR=40, padT=60, padB=60;
-            const chartH = 270;
-            const chartW = W - padL - padR;
-            const top = y0 + padT;
-            const base = y0 + chartH - padB;
-
-            ctx.fillStyle = "#0f1f17";
-            ctx.font = "bold 20px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-            ctx.fillText(title, padL, y0 + 34);
-
-            // max total
-            let maxT=0;
-            for (const b of buckets) maxT = Math.max(maxT, getterTotal(b));
-            if (maxT <= 0) maxT = 1;
-
-            const n = buckets.length || 1;
-            const gap = 6;
-            const barW = Math.max(4, (chartW - gap*(n-1)) / n);
-
-            // axes baseline
-            ctx.strokeStyle = "rgba(15,31,23,0.18)";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(padL, base+0.5);
-            ctx.lineTo(padL+chartW, base+0.5);
-            ctx.stroke();
-
-            // bars
-            for (let i=0;i<n;i++){
-              const b = buckets[i];
-              const x = padL + i*(barW+gap);
-              let acc=0;
-              projectNames.forEach((p,pi)=>{
-                const v = (getterValues(b)[p] || 0);
-                const h = (v/maxT) * (base-top);
-                ctx.fillStyle = getColor(pi);
-                ctx.fillRect(x, base-acc-h, barW, h);
-                acc += h;
-              });
-
-              // x label (sparse)
-              if (n <= 16 || i % Math.ceil(n/12) === 0 || i === n-1){
-                ctx.fillStyle = "rgba(15,31,23,0.65)";
-                ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-                const label = String(b.key);
-                ctx.fillText(label, x, base + 18);
-              }
-            }
-
-            // legend
-            let lx = padL, ly = y0 + chartH - 20;
-            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-            projectNames.forEach((p,pi)=>{
-              ctx.fillStyle = getColor(pi);
-              ctx.fillRect(lx, ly-10, 10, 10);
-              ctx.fillStyle = "rgba(15,31,23,0.85)";
-              ctx.fillText(p, lx+14, ly);
-              lx += 14 + ctx.measureText(p).width + 18;
-              if (lx > W - 240){
-                lx = padL;
-                ly += 18;
-              }
-            });
-          }
-
-          // Build value maps
-          const incomeBuckets = buckets.map(b=>({key:b.key, valuesIncome:{...b.valuesIncome}, valuesHours:{...b.valuesHours}, valuesRatio:{...b.valuesRatio},
-                                               totalIncome:b.totalIncome, totalHours:b.totalHours, totalRatio:b.totalRatio}));
-
-          // draw 3 charts
-          drawStacked("Total income by project", 30, b=>b.totalIncome, b=>b.valuesIncome);
-          drawStacked("Total duration by project", 380, b=>b.totalHours, b=>b.valuesHours);
-          drawStacked("Income / duration by project", 730, b=>b.totalRatio, b=>b.valuesRatio);
-
-          const url = canvas.toDataURL("image/png");
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "autoweave_visualisations.png";
-          a.click();
-        } catch (e) {
-          console.warn("Export PNG failed:", e);
-        }
-      });
-    })();
-
 
     runMergeBtn.addEventListener("click", async () => {
       const entries = entriesFile.files?.[0];
