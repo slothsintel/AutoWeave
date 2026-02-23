@@ -367,6 +367,7 @@
   }
 
   function renderStackedBars(container, data, projectNames, valueKey, title) {
+    projectNames = Array.isArray(projectNames) ? projectNames : [];
     clearEl(container);
 
     const header = createEl("div", { className: "aw-vis-header" }, [
@@ -526,13 +527,45 @@
   }
 
   function normalizeMergedRow(obj) {
-    const project = String(obj.project || obj.Project || obj.PROJECT || "").trim();
-    const dateRaw = obj.work_date || obj.date || obj.workDate || obj.workDateISO || obj.workdate || "";
+    // Support both frontend-friendly headers (project, work_date, income)
+    // and backend merge headers (project_name, date, amount_gbp, amount).
+    const project = String(
+      obj.project ??
+      obj.project_name ??
+      obj.Project ??
+      obj.PROJECT ??
+      obj.projectName ??
+      obj.projectName ??
+      ""
+    ).trim();
+
+    const dateRaw =
+      obj.work_date ??
+      obj.date ??
+      obj.workDate ??
+      obj.workDateISO ??
+      obj.workdate ??
+      "";
+
     const d = parseDateish(dateRaw);
     const work_date = d ? isoDate(d) : String(dateRaw || "").trim();
 
-    const income = Number(obj.income ?? obj.Income ?? obj.amount ?? obj.Amount ?? 0) || 0;
-    const duration = Number(obj.duration_hours ?? obj.duration ?? obj.hours ?? obj.Hours ?? 0) || 0;
+    const income = Number(
+      obj.income ??
+      obj.amount_gbp ??
+      obj.amount ??
+      obj.Income ??
+      obj.Amount ??
+      0
+    ) || 0;
+
+    const duration = Number(
+      obj.duration_hours ??
+      obj.duration ??
+      obj.hours ??
+      obj.Hours ??
+      0
+    ) || 0;
 
     return { work_date, project, income, duration };
   }
