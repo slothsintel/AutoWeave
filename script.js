@@ -1320,88 +1320,6 @@
 
       // --- Build series ---
       const { projectNames, buckets } = buildDailyProjectSeries(normalized, group);
-      function bucketKeyForGroup(dateStr, group) {
-        const iso = toIsoDate(dateStr);
-        if (!iso) return "";
-        const d = new Date(iso + "T00:00:00");
-        const yyyy = d.getFullYear();
-        if (group === "day") return iso;
-        if (group === "month") {
-          const mm = String(d.getMonth() + 1).padStart(2, "0");
-          return `${yyyy}-${mm}`;
-        }
-        if (group === "year") return String(yyyy);
-        // week (ISO-ish)
-        const tmp = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-        const dayNum = tmp.getUTCDay() || 7;
-        tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
-        const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(), 0, 1));
-        const weekNo = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
-        return `${tmp.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
-      }
-
-
-      // frequency mode: replace values with record counts (per project per bucket)
-      if (mode === "frequency") {
-        for (const b of buckets) {
-          const freq = Object.fromEntries(projectNames.map(p => [p, 0]));
-          for (const r of normalized) {
-            const key = bucketKeyForGroup(r.work_date, group);
-            if (key !== b.key) continue;
-            freq[r.project] = (freq[r.project] || 0) + 1;
-          }
-          b.valuesIncome = { ...freq };
-          b.valuesHours = { ...freq };
-          b.valuesRatio = { ...freq };
-          b.totalIncome = sum(Object.values(b.valuesIncome));
-          b.totalHours = sum(Object.values(b.valuesHours));
-          b.totalRatio = sum(Object.values(b.valuesRatio));
-        }
-      }
-
-      // increment mode: period-over-period change from cumulative
-      if (mode === "increment") {
-        const prevIncome = Object.fromEntries(projectNames.map(p => [p, 0]));
-        const prevHours  = Object.fromEntries(projectNames.map(p => [p, 0]));
-        const prevRatio  = Object.fromEntries(projectNames.map(p => [p, 0]));
-        // first compute cumulative
-        for (const b of buckets) {
-          for (const p of projectNames) {
-            prevIncome[p] += (b.valuesIncome[p] || 0);
-            prevHours[p]  += (b.valuesHours[p] || 0);
-            prevRatio[p]  += (b.valuesRatio[p] || 0);
-            b.valuesIncome[p] = prevIncome[p];
-            b.valuesHours[p]  = prevHours[p];
-            b.valuesRatio[p]  = prevRatio[p];
-          }
-        }
-        // then convert to increments
-        const lastIncome = Object.fromEntries(projectNames.map(p => [p, 0]));
-        const lastHours  = Object.fromEntries(projectNames.map(p => [p, 0]));
-        const lastRatio  = Object.fromEntries(projectNames.map(p => [p, 0]));
-        for (const b of buckets) {
-          for (const p of projectNames) {
-            const ci = b.valuesIncome[p] || 0;
-            const ch = b.valuesHours[p] || 0;
-            const cr = b.valuesRatio[p] || 0;
-            b.valuesIncome[p] = ci - lastIncome[p];
-            b.valuesHours[p]  = ch - lastHours[p];
-            b.valuesRatio[p]  = cr - lastRatio[p];
-            lastIncome[p] = ci;
-            lastHours[p]  = ch;
-            lastRatio[p]  = cr;
-          }
-          b.totalIncome = sum(Object.values(b.valuesIncome));
-          b.totalHours  = sum(Object.values(b.valuesHours));
-          b.totalRatio  = sum(Object.values(b.valuesRatio));
-        }
-      }
-
-      // nominal mode: explicit (no-op)
-      if (mode === "nominal") {
-        // values already nominal totals per bucket
-      }
-
 
       // cumulative mode
       if (mode === "cumulative") {
@@ -1432,9 +1350,9 @@
       const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
       const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
 
-      renderStackedBars(visIncome, incomeSeries, projectNames, mode === "frequency" ? "count" : "money", mode === "frequency" ? "Frequency by project" : "Total income by project");
-      renderStackedBars(visDuration, hoursSeries, projectNames, mode === "frequency" ? "count" : "hours", mode === "frequency" ? "Frequency by project" : "Total duration by project");
-      renderStackedBars(visRatio, ratioSeries, projectNames, mode === "frequency" ? "count" : "ratio", mode === "frequency" ? "Frequency by project" : "Income / duration by project");
+      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Total income by project");
+      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Total duration by project");
+      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / duration by project");
     }    function resetAll() {
       if (projectsFile) projectsFile.value = "";
       incomesFile.value = "";
@@ -1466,7 +1384,6 @@
     (function initVisControlsOnce() {
       const root = document.querySelector('[aria-label="See (preview and visualisation)"]') || document;
       const exportBtn = document.getElementById("exportPngBtn");
-      const exportSvgBtn = document.getElementById("exportSvgBtn");
       const fromEl = document.getElementById("rangeFrom");
       const toEl = document.getElementById("rangeTo");
       const customBtn = document.getElementById("rangeCustom");
@@ -1643,127 +1560,7 @@
         } catch (e) {
           console.warn("Export PNG failed:", e);
         }
-      }
-
-      // Export SVG (wraps the same PNG export into an SVG container)
-      exportSvgBtn?.addEventListener("click", () => {
-        try {
-          // reuse the PNG exporter to get a dataURL
-          const prevWarn = console.warn;
-          const canvas = document.createElement("canvas");
-          // We'll trigger the existing export by calling the internal drawing logic again (duplicated minimally here)
-          const txt = currentMergedCsvText();
-          if (!txt) return;
-
-          const rows = parseCsv(txt);
-          const objs = rowsToObjects(rows)
-            .map(normalizeMergedRow)
-            .filter(r => r.project && r.work_date);
-
-          const groupSel = document.getElementById("groupBySel");
-          const group = groupSel ? String(groupSel.value || "day") : "day";
-
-          const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
-
-          const W = 1400, H = 1050;
-          canvas.width = W; canvas.height = H;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0,0,W,H);
-
-          function getColor(i){
-            const palette = [
-              "#ff0000","#ff6003","#ffe600","#1eff00","#00ff9d","#71ccc1",
-              "#0400ff","#f700ff","#ff7c7c","#ffb477","#fbfd83","#83ff83"
-            ];
-            return palette[i % palette.length];
-          }
-
-          function drawStacked(title, y0, getterTotal, getterValues){
-            const padL=80, padR=40, padT=60, padB=60;
-            const chartH = 270;
-            const chartW = W - padL - padR;
-            const top = y0 + padT;
-            const base = y0 + chartH - padB;
-
-            ctx.fillStyle = "#0f1f17";
-            ctx.font = "bold 20px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-            ctx.fillText(title, padL, y0 + 34);
-
-            let maxT=0;
-            for (const b of buckets) maxT = Math.max(maxT, getterTotal(b));
-            if (maxT <= 0) maxT = 1;
-
-            const n = buckets.length || 1;
-            const gap = 6;
-            const barW = Math.max(4, (chartW - gap*(n-1)) / n);
-
-            ctx.strokeStyle = "rgba(15,31,23,0.18)";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.moveTo(padL, base+0.5);
-            ctx.lineTo(padL+chartW, base+0.5);
-            ctx.stroke();
-
-            for (let i=0;i<n;i++){
-              const b = buckets[i];
-              const x = padL + i*(barW+gap);
-              let acc=0;
-              projectNames.forEach((p,pi)=>{
-                const v = (getterValues(b)[p] || 0);
-                const h = (v/maxT) * (base-top);
-                ctx.fillStyle = getColor(pi);
-                ctx.fillRect(x, base-acc-h, barW, h);
-                acc += h;
-              });
-
-              if (n <= 16 || i % Math.ceil(n/12) === 0 || i === n-1){
-                ctx.fillStyle = "rgba(15,31,23,0.65)";
-                ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-                const label = String(b.key);
-                ctx.fillText(label, x, base + 18);
-              }
-            }
-
-            let lx = padL, ly = y0 + chartH - 20;
-            ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-            projectNames.forEach((p,pi)=>{
-              ctx.fillStyle = getColor(pi);
-              ctx.fillRect(lx, ly-10, 10, 10);
-              ctx.fillStyle = "rgba(15,31,23,0.85)";
-              ctx.fillText(p, lx+14, ly);
-              lx += 14 + ctx.measureText(p).width + 18;
-              if (lx > W - 240){
-                lx = padL;
-                ly += 18;
-              }
-            });
-          }
-
-          drawStacked("Total income by project", 30, b=>b.totalIncome, b=>b.valuesIncome);
-          drawStacked("Total duration by project", 380, b=>b.totalHours, b=>b.valuesHours);
-          drawStacked("Income / duration by project", 730, b=>b.totalRatio, b=>b.valuesRatio);
-
-          const pngUrl = canvas.toDataURL("image/png");
-
-          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-  <image href="${pngUrl}" width="${W}" height="${H}" />
-</svg>`;
-
-          const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "autoweave_visualisations.svg";
-          a.click();
-          URL.revokeObjectURL(url);
-        } catch (e) {
-          console.warn("Export SVG failed:", e);
-        }
       });
-);
     })();
 
 
