@@ -367,45 +367,11 @@
   }
 
   function renderStackedBars(container, data, projectNames, valueKey, title) {
-    projectNames = Array.isArray(projectNames) ? projectNames : [];
     clearEl(container);
 
     const header = createEl("div", { className: "aw-vis-header" }, [
       createEl("div", { className: "aw-vis-title", textContent: title }),
     ]);
-
-
-    const legend = createEl("div", { className: "aw-vis-legend" });
-    legend.style.display = "flex";
-    legend.style.flexWrap = "wrap";
-    legend.style.gap = "10px";
-    legend.style.alignItems = "center";
-    legend.style.marginTop = "6px";
-    legend.style.fontSize = "0.86rem";
-    legend.style.color = "var(--muted)";
-
-    for (const p of projectNames) {
-      const item = createEl("div", { className: "aw-legend-item" });
-      item.style.display = "inline-flex";
-      item.style.alignItems = "center";
-      item.style.gap = "8px";
-
-      const dot = createEl("span", { className: "aw-legend-dot" });
-      dot.style.width = "9px";
-      dot.style.height = "9px";
-      dot.style.borderRadius = "9999px";
-      dot.style.background = colorForProject(p);
-      dot.style.display = "inline-block";
-      dot.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.9)";
-
-      const label = createEl("span", { textContent: p });
-
-      item.appendChild(dot);
-      item.appendChild(label);
-      legend.appendChild(item);
-    }
-
-    header.appendChild(legend);
 
     container.appendChild(header);
 
@@ -527,126 +493,57 @@
   }
 
   function normalizeMergedRow(obj) {
-    // Support both frontend-friendly headers (project, work_date, income)
-    // and backend merge headers (project_name, date, amount_gbp, amount).
-    const project = String(
-      obj.project ??
-      obj.project_name ??
-      obj.Project ??
-      obj.PROJECT ??
-      obj.projectName ??
-      obj.projectName ??
-      ""
-    ).trim();
-
-    const dateRaw =
-      obj.work_date ??
-      obj.date ??
-      obj.workDate ??
-      obj.workDateISO ??
-      obj.workdate ??
-      "";
-
+    const project = String(obj.project || obj.Project || obj.PROJECT || "").trim();
+    const dateRaw = obj.work_date || obj.date || obj.workDate || obj.workDateISO || obj.workdate || "";
     const d = parseDateish(dateRaw);
     const work_date = d ? isoDate(d) : String(dateRaw || "").trim();
 
-    const income = Number(
-      obj.income ??
-      obj.amount_gbp ??
-      obj.amount ??
-      obj.Income ??
-      obj.Amount ??
-      0
-    ) || 0;
-
-    const duration = Number(
-      obj.duration_hours ??
-      obj.duration ??
-      obj.hours ??
-      obj.Hours ??
-      0
-    ) || 0;
+    const income = Number(obj.income ?? obj.Income ?? obj.amount ?? obj.Amount ?? 0) || 0;
+    const duration = Number(obj.duration_hours ?? obj.duration ?? obj.hours ?? obj.Hours ?? 0) || 0;
 
     return { work_date, project, income, duration };
   }
 
-  
-  // R-style quick stats table (by project)
-  function buildQuickStatsRTable(csvText) {
+  function buildQuickStatsTextFromMergedCsv(csvText) {
     const rows = parseCsv(csvText);
     const objs = rowsToObjects(rows);
 
     const normalized = objs
       .map(normalizeMergedRow)
-      .filter(r => r.project && (r.income !== 0 || r.duration !== 0));
+      .filter(r => r.project && r.work_date);
 
-    // aggregate
-    const by = new Map();
+    const totalIncome = sum(normalized.map(r => r.income));
+    const totalHours = sum(normalized.map(r => r.duration));
+    const ratio = totalHours > 0 ? (totalIncome / totalHours) : 0;
+
+    const byProject = new Map();
     for (const r of normalized) {
-      const key = r.project;
-      if (!by.has(key)) by.set(key, { income: 0, duration: 0 });
-      const rec = by.get(key);
-      rec.income += Number(r.income) || 0;
-      rec.duration += Number(r.duration) || 0;
+      if (!byProject.has(r.project)) byProject.set(r.project, { income: 0, hours: 0 });
+      const rec = byProject.get(r.project);
+      rec.income += r.income;
+      rec.hours += r.duration;
     }
 
-    const entries = Array.from(by.entries()).map(([project, rec]) => {
-      const income = rec.income;
-      const duration = rec.duration;
-      const iph = duration > 0 ? income / duration : 0;
-      return { project, income, duration, iph };
-    });
+    const lines = [];
+    lines.push(`Total income: £${fmtMoney(totalIncome)}`);
+    lines.push(`Total duration: ${fmtHours(totalHours)}`);
+    lines.push(`Income / hour: £${fmtRatio(ratio)}`);
+    lines.push("");
+    lines.push("Project\tTotal income\tTotal duration\tIncome / hour");
 
-    // sort by income desc then name
-    entries.sort((a, b) => (b.income - a.income) || a.project.localeCompare(b.project));
+    const projectsSorted = Array.from(byProject.entries())
+      .sort((a, b) => (b[1].income - a[1].income) || (b[1].hours - a[1].hours) || a[0].localeCompare(b[0]));
 
-    const fmtNum = (v, decimals=2) => {
-      const n = Number(v) || 0;
-      return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-    };
-
-    // prepare strings
-    const rowsOut = entries.map(e => ({
-      project: e.project,
-      income: fmtNum(e.income, 2),
-      duration: fmtNum(e.duration, 2),
-      iph: fmtNum(e.iph, 2),
-    }));
-
-    const col1 = "total_income";
-    const col2 = "total_duration";
-    const col3 = "income_per_hour";
-
-    const wProject = Math.max(7, ...rowsOut.map(r => r.project.length));
-    const w1 = Math.max(col1.length, ...rowsOut.map(r => r.income.length));
-    const w2 = Math.max(col2.length, ...rowsOut.map(r => r.duration.length));
-    const w3 = Math.max(col3.length, ...rowsOut.map(r => r.iph.length));
-
-    const padL = (t, w) => String(t).padStart(w, " ");
-    const padR = (t, w) => String(t).padEnd(w, " ");
-
-    let out = "";
-    // header (R style: leading spaces, then colnames)
-    out += padR("", wProject) + "  " + padL(col1, w1) + "  " + padL(col2, w2) + "  " + padL(col3, w3) + "\\n";
-
-    // rows (R style rownames)
-    for (const r of rowsOut) {
-      out += padR(r.project, wProject) + "  " + padL(r.income, w1) + "  " + padL(r.duration, w2) + "  " + padL(r.iph, w3) + "\\n";
+    for (const [name, rec] of projectsSorted) {
+      const pRatio = rec.hours > 0 ? (rec.income / rec.hours) : 0;
+      lines.push(`${name}\t£${fmtMoney(rec.income)}\t${fmtHours(rec.hours)}\t£${fmtRatio(pRatio)}`);
     }
 
-    // totals (optional but useful; keep R-ish)
-    const totalIncome = entries.reduce((a, e) => a + (Number(e.income) || 0), 0);
-    const totalDur = entries.reduce((a, e) => a + (Number(e.duration) || 0), 0);
-    const totalIph = totalDur > 0 ? totalIncome / totalDur : 0;
-    const tIncome = fmtNum(totalIncome, 2);
-    const tDur = fmtNum(totalDur, 2);
-    const tIph = fmtNum(totalIph, 2);
-
-    out += padR("TOTAL", wProject) + "  " + padL(tIncome, w1) + "  " + padL(tDur, w2) + "  " + padL(tIph, w3);
-
-    return out.trimEnd();
+    return lines.join("\n");
   }
-function buildDailyProjectSeries(objs, group = "day") {
+
+
+  function buildDailyProjectSeries(objs, group = "day") {
     const rows = objs
       .map(normalizeMergedRow)
       .filter(r => r.project && r.work_date);
@@ -1329,10 +1226,6 @@ function buildDailyProjectSeries(objs, group = "day") {
         });
 
         const data = await res.json();
-
-        // Quick stats in R-style table format (by project)
-        // (derived from merged CSV so it always matches the charts)
-
         const hasCsv = typeof data.download_csv === "string" && data.download_csv.length > 0;
         if (!hasCsv) {
           setStatus(`No output CSV returned.`);
@@ -1341,7 +1234,8 @@ function buildDailyProjectSeries(objs, group = "day") {
 
         const csv = data.download_csv;
         setBoxText(previewMerged, csv);
-        setBoxText(statsMerged, buildQuickStatsRTable(csv));
+
+        setBoxText(statsMerged, buildQuickStatsTextFromMergedCsv(csv));
 
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
