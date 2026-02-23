@@ -1114,31 +1114,158 @@ function ensureAuthBar() {
 // 6) Workbench wiring (upload + merge)
 // =========================================================
 function initWorkbench() {
-  const incomesFile = document.getElementById("incomesFile");
-  const entriesFile = document.getElementById("entriesFile");
-  const projectsFile = document.getElementById("projectsFile");
-  const runMergeBtn = document.getElementById("runMergeBtn");
-  const resetAllBtn = document.getElementById("resetAllBtn");
+    const incomesFile = document.getElementById("incomesFile");
+    const entriesFile = document.getElementById("entriesFile");
+    const projectsFile = document.getElementById("projectsFile");
+    const runMergeBtn = document.getElementById("runMergeBtn");
+    const resetAllBtn = document.getElementById("resetAllBtn");
 
-  const statusBox = document.getElementById("statusBox");
-  const previewMerged = document.getElementById("previewMerged");
-  const statsMerged = document.getElementById("statsMerged");
-  const downloadBtn = document.getElementById("downloadBtn");
+    const statusBox = document.getElementById("statusBox");
+    const previewMerged = document.getElementById("previewMerged");
+    const statsMerged = document.getElementById("statsMerged");
+    const downloadBtn = document.getElementById("downloadBtn");
 
-  function setBoxText(el, txt) {
-    if (!el) return;
-    if (typeof el.value === "string") el.value = txt;
-    else el.textContent = txt;
+    function setBoxText(el, txt) {
+      if (!el) return;
+      if (typeof el.value === "string") el.value = txt;
+      else el.textContent = txt;
+    }
+
+    if (!incomesFile || !entriesFile ||
+        !runMergeBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
+      return;
+    }
+
+    function setStatus(text) {
+      statusBox.textContent = text || "";
+    }
+
+
+
+// ---------------------------------------------------------
+// Auto-load sample CSVs (static demo) if user hasn't uploaded files
+// - Works on GitHub Pages even when tech.html is in a subfolder
+// - Also auto-runs merge once samples are loaded (so the "See" panel isn't empty)
+// ---------------------------------------------------------
+async function fetchAsFile(url, filename) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to load sample: ${url} (${res.status})`);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: "text/csv" });
+}
+
+function setInputFile(inputEl, file) {
+  if (!inputEl || !file) return;
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  inputEl.files = dt.files;
+}
+
+async function tryFetchSample(filename, logicalName) {
+  // Try a few common paths:
+  // 1) Relative to current page
+  // 2) Absolute from site root
+  // 3) Relative to this script's directory (best for pages in subfolders)
+  const scriptUrl = (document.currentScript && document.currentScript.src) ? new URL(document.currentScript.src, document.baseURI) : null;
+  const scriptDir = scriptUrl ? scriptUrl.href.substring(0, scriptUrl.href.lastIndexOf("/") + 1) : "";
+  const candidates = [
+    `assets/technology/${filename}`,
+    `/assets/technology/${filename}`,
+    `${scriptDir}assets/technology/${filename}`,
+    `${scriptDir}../assets/technology/${filename}`,
+  ];
+
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const f = await fetchAsFile(url, filename);
+      return f;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw new Error(`Could not load ${logicalName} sample. Checked: ${candidates.join(", ")}. Last error: ${lastErr && lastErr.message ? lastErr.message : lastErr}`);
+}
+
+async function maybeLoadDefaultSamples() {
+  // Only load if the user hasn't picked anything yet
+  const hasEntries = entriesFile?.files && entriesFile.files.length > 0;
+  const hasIncomes = incomesFile?.files && incomesFile.files.length > 0;
+  const hasProjects = projectsFile?.files && projectsFile.files.length > 0;
+
+  // If user already provided both required inputs, do nothing
+  if (hasEntries && hasIncomes) return;
+
+  try {
+    setStatus("Loading sample files…");
+
+    const [entriesF, incomesF] = await Promise.all([
+      hasEntries ? null : tryFetchSample("time_sample.csv", "Time"),
+      hasIncomes ? null : tryFetchSample("income_sample.csv", "Income"),
+    ]);
+
+    if (entriesF) setInputFile(entriesFile, entriesF);
+    if (incomesF) setInputFile(incomesFile, incomesF);
+
+    // Optional projects sample (ignore if missing)
+    if (projectsFile && !hasProjects) {
+      try {
+        const projectsF = await tryFetchSample("project_sample.csv", "Project");
+        setInputFile(projectsFile, projectsF);
+      } catch (e) {
+        // optional
+      }
+    }
+
+    setStatus("Sample files loaded ✔");
+
+    // Auto-run merge so the "See" panel is populated.
+    // (If the user later uploads their own files, they can re-run merge normally.)
+    if (runMergeBtn && !runMergeBtn.disabled) {
+      runMergeBtn.click();
+    }
+  } catch (e) {
+    // Don't block the app if samples fail to load
+    const msg = (e && e.message) ? e.message : String(e);
+    setStatus(`Sample auto-load failed: ${msg}`);
+    console.warn("Sample auto-load failed:", e);
+  }
+}
+
+// Auto-load samples on page load if no user files selected
+maybeLoadDefaultSamples();
+
+  // =========================================================
+  // 7) Guided local preview (single CSV)
+  // =========================================================
+  function initGuidedExample() {
+    const fileInput = document.getElementById("guidedFileInput");
+    const preview = document.getElementById("guidedPreview");
+    if (!fileInput || !preview) return;
+
+    fileInput.addEventListener("change", async () => {
+      const f = fileInput.files?.[0];
+      if (!f) return;
+      const txt = await f.text();
+      preview.value = txt;
+    });
   }
 
-  if (!incomesFile || !entriesFile ||
-      !runMergeBtn || !statusBox || !previewMerged || !statsMerged || !downloadBtn) {
-    return;
+  // =========================================================
+  // 8) Boot
+  // =========================================================
+  function boot() {
+    ensureAuthBar();
+    initGuidedExample();
+    initWorkbench();
   }
 
-  function setStatus(text) {
-    statusBox.textContent = text || "";
-  }}
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+}
 
 
 
