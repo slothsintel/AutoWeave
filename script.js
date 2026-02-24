@@ -1629,26 +1629,44 @@
           URL.revokeObjectURL(url);
           return;
         }
+        // For JPG, paint a white background first (JPG has no alpha)
+        if (kind === "jpg") {
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         ctx.drawImage(img, 0, 0);
 
         const mime = (kind === "jpg") ? "image/jpeg" : "image/png";
         const ext = (kind === "jpg") ? "jpg" : "png";
 
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            URL.revokeObjectURL(url);
-            return;
-          }
+        const triggerDownload = (blobOrDataUrl) => {
           const dl = document.createElement("a");
-          dl.href = URL.createObjectURL(blob);
+          if (typeof blobOrDataUrl === "string") {
+            dl.href = blobOrDataUrl;
+          } else {
+            dl.href = URL.createObjectURL(blobOrDataUrl);
+            setTimeout(() => URL.revokeObjectURL(dl.href), 8000);
+          }
           dl.download = `autoweave_visualisations.${ext}`;
           document.body.appendChild(dl);
           dl.click();
           dl.remove();
-          setTimeout(() => URL.revokeObjectURL(dl.href), 5000);
-          URL.revokeObjectURL(url);
+        };
+
+        // Prefer Blob download, but fall back to dataURL if toBlob returns null (some browsers)
+        canvas.toBlob((blob) => {
+          try {
+            if (blob) {
+              triggerDownload(blob);
+            } else {
+              const dataUrl = canvas.toDataURL(mime, kind === "jpg" ? 0.92 : undefined);
+              triggerDownload(dataUrl);
+            }
+          } finally {
+            URL.revokeObjectURL(url);
+          }
         }, mime, (kind === "jpg") ? 0.92 : undefined);
-      };
+            };
       img.onerror = () => {
         URL.revokeObjectURL(url);
       };
@@ -1799,8 +1817,6 @@
       function setActiveExport(activeBtn) {
         exportBtns.forEach(b => setPillActive(b, b === activeBtn));
       }
-      // Initialize (PNG default)
-      setActiveExport(exportBtn);
 
       function setRange(mode) {
         visState.range = mode;
