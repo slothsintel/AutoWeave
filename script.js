@@ -611,7 +611,7 @@
     title.style.color = "rgba(15,31,23,0.86)";
 
     const meta = document.createElement("div");
-    meta.textContent = `NUMBER OF PROJECTS: ${projectsSorted.length}      &nbsp&nbspNUMBER OF ENTRIES: ${rowCount}`;
+    meta.textContent = `NUMBER OF PROJECTS: ${projectsSorted.length}  |  NUMBER OF ENTRIES: ${rowCount}`;
     meta.style.color = "rgba(15,31,23,0.62)";
     meta.style.fontWeight = "700";
     meta.style.marginLeft = "auto";
@@ -648,9 +648,9 @@
       return box;
     }
 
-    kpis.appendChild(kpi("Total income", `£${fmtMoney(totalIncome)}`));
-    kpis.appendChild(kpi("Total time", `${fmtHours(totalHours)} h`));
-    kpis.appendChild(kpi("Income / hour", `£${fmtRatio(ratio)}`));
+    kpis.appendChild(kpi("Total income (£)", `${fmtMoney(totalIncome)}`));
+    kpis.appendChild(kpi("Total time (h)", `${fmtHours(totalHours)}`));
+    kpis.appendChild(kpi("Average ratio (£/h)", `£${fmtRatio(ratio)}`));
 
     // Table (tibble-like)
     const tableWrap = document.createElement("div");
@@ -669,9 +669,9 @@
     const trh = document.createElement("tr");
     const headers = [
       { t: "project", align: "left" },
-      { t: "total_income", align: "right" },
-      { t: "total_time_h", align: "right" },
-      { t: "income_per_h", align: "right" },
+      { t: "income", align: "right" },
+      { t: "time", align: "right" },
+      { t: "ratio", align: "right" },
     ];
     for (const h of headers) {
       const th = document.createElement("th");
