@@ -742,6 +742,9 @@
     function keyForDate(iso) {
       const d = parseDateish(iso);
       if (!d) return iso;
+      if (group === "year") {
+        return `${d.getFullYear()}`;
+      }
       if (group === "month") {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       }
@@ -1342,26 +1345,343 @@
     }
 
     function renderVisualsFromMergedCsv(csvText) {
-      const rows = parseCsv(csvText);
+      // Keep the latest merged CSV so controls can re-render without re-merging
+      lastMergedCsv = String(csvText || "");
+
+      const rows = parseCsv(lastMergedCsv);
       const objs = rowsToObjects(rows);
-      const groupSel = document.getElementById("groupBySel");
-      const group = groupSel ? String(groupSel.value || "day") : "day";
 
-      const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
+      // Normalize once, then filter by date range
+      const normalizedAll = objs
+        .map(normalizeMergedRow)
+        .filter(r => r.project && r.work_date);
 
+      // If no rows, just clear
       const visIncome = document.getElementById("visIncome");
       const visDuration = document.getElementById("visDuration");
       const visRatio = document.getElementById("visRatio");
       if (!visIncome || !visDuration || !visRatio) return;
 
-      const incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
-      const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
-      const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
+      if (!normalizedAll.length) {
+        clearEl(visIncome); clearEl(visDuration); clearEl(visRatio);
+        return;
+      }
+
+      function toDate(iso) {
+        const d = parseDateish(iso);
+        return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
+      }
+
+      function maxDate(rows_) {
+        let mx = null;
+        for (const r of rows_) {
+          const d = toDate(r.work_date);
+          if (!d) continue;
+          if (!mx || d.getTime() > mx.getTime()) mx = d;
+        }
+        return mx;
+      }
+
+      function filterByRange(rows_) {
+        const mode = visState.range;
+
+        if (!mode || mode === "all") return rows_;
+
+        // Determine from/to
+        let from = null;
+        let to = null;
+
+        if (mode === "custom") {
+          from = toDate(visState.customFrom);
+          to = toDate(visState.customTo);
+        } else {
+          const days = Number(mode) || 0; // "14" | "30" | "90"
+          const mx = maxDate(rows_);
+          if (!mx || !days) return rows_;
+          to = mx;
+          from = new Date(mx);
+          from.setDate(from.getDate() - (days - 1));
+        }
+
+        if (!from && !to) return rows_;
+
+        const fromT = from ? from.getTime() : -Infinity;
+        const toT = to ? to.getTime() : Infinity;
+
+        return rows_.filter(r => {
+          const d = toDate(r.work_date);
+          if (!d) return false;
+          const t = d.getTime();
+          return t >= fromT && t <= toT;
+        });
+      }
+
+      const normalized = filterByRange(normalizedAll);
+
+      // Grouping is driven by hidden select for backwards compatibility
+      const groupSel = document.getElementById("groupBySel");
+      const group = groupSel ? String(groupSel.value || "day") : "day";
+
+      const { projectNames, buckets } = buildDailyProjectSeries(normalized, group);
+
+      // Build per-bucket series
+      let incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
+      let hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
+      let ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
+
+      // Optional cumulative mode
+      if (visState.cumulative) {
+        const runIncome = {};
+        const runHours = {};
+        let runTotalIncome = 0;
+        let runTotalHours = 0;
+
+        incomeSeries = incomeSeries.map((b) => {
+          const values = { ...b.values };
+          for (const p of projectNames) {
+            runIncome[p] = (runIncome[p] || 0) + (Number(values[p]) || 0);
+            values[p] = runIncome[p];
+          }
+          runTotalIncome += Number(b.total) || 0;
+          return { key: b.key, values, total: runTotalIncome };
+        });
+
+        hoursSeries = hoursSeries.map((b) => {
+          const values = { ...b.values };
+          for (const p of projectNames) {
+            runHours[p] = (runHours[p] || 0) + (Number(values[p]) || 0);
+            values[p] = runHours[p];
+          }
+          runTotalHours += Number(b.total) || 0;
+          return { key: b.key, values, total: runTotalHours };
+        });
+
+        ratioSeries = incomeSeries.map((b, idx) => {
+          const values = {};
+          for (const p of projectNames) {
+            const inc = Number(incomeSeries[idx]?.values?.[p]) || 0;
+            const hrs = Number(hoursSeries[idx]?.values?.[p]) || 0;
+            values[p] = hrs > 0 ? (inc / hrs) : 0;
+          }
+          const totInc = Number(incomeSeries[idx]?.total) || 0;
+          const totHrs = Number(hoursSeries[idx]?.total) || 0;
+          const total = totHrs > 0 ? (totInc / totHrs) : 0;
+          return { key: b.key, values, total };
+        });
+      }
 
       renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
       renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
       renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
     }
+
+    // ------------------------------
+    // Visualisation controls wiring
+    // ------------------------------
+    let lastMergedCsv = "";
+    const visState = {
+      range: "all",          // "14" | "30" | "90" | "all" | "custom"
+      customFrom: "",
+      customTo: "",
+      cumulative: false,
+    };
+
+    function getCurrentMergedCsvText() {
+      return (typeof previewMerged.value === "string") ? String(previewMerged.value || "") : String(previewMerged.textContent || "");
+    }
+
+    function rerenderFromState() {
+      const txt = lastMergedCsv || getCurrentMergedCsvText();
+      if (txt) renderVisualsFromMergedCsv(txt);
+    }
+
+    function exportVisualsAsPng() {
+      const anchor = document.getElementById("owExportPng");
+      const card = document.getElementById("visIncome")?.closest(".aw-card") || null;
+      if (!card) return;
+
+      // Clone to avoid layout shifts (and to strip active focus)
+      const clone = card.cloneNode(true);
+      // Ensure controls don't show focus rings in export
+      clone.querySelectorAll("button, input, select, textarea").forEach(el => {
+        el.style.outline = "none";
+        el.style.boxShadow = "none";
+      });
+
+      // Measure using the live node (more reliable)
+      const w = Math.max(300, card.scrollWidth);
+      const h = Math.max(200, card.scrollHeight);
+
+      const xmlns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(xmlns, "svg");
+      svg.setAttribute("xmlns", xmlns);
+      svg.setAttribute("width", String(w));
+      svg.setAttribute("height", String(h));
+
+      const fo = document.createElementNS(xmlns, "foreignObject");
+      fo.setAttribute("x", "0");
+      fo.setAttribute("y", "0");
+      fo.setAttribute("width", String(w));
+      fo.setAttribute("height", String(h));
+
+      // Wrap clone inside a container with a solid background (consistent export)
+      const wrap = document.createElement("div");
+      wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      wrap.style.width = `${w}px`;
+      wrap.style.height = `${h}px`;
+      wrap.style.background = "white";
+      wrap.style.padding = "14px";
+      wrap.appendChild(clone);
+
+      fo.appendChild(wrap);
+      svg.appendChild(fo);
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          const dl = document.createElement("a");
+          dl.href = URL.createObjectURL(blob);
+          dl.download = "autoweave_visualisations.png";
+          document.body.appendChild(dl);
+          dl.click();
+          dl.remove();
+          setTimeout(() => URL.revokeObjectURL(dl.href), 5000);
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    function initVisControlsOnce() {
+      const rangeWrap = document.getElementById("owRangePills");
+      const groupWrap = document.getElementById("owGroupPills");
+      const modeBtn = document.getElementById("owModeCumulative");
+      const exportBtn = document.getElementById("owExportPng");
+      const customBox = document.getElementById("owRangeCustomInputs");
+      const fromInput = document.getElementById("owFromDate");
+      const toInput = document.getElementById("owToDate");
+      const applyBtn = document.getElementById("owApplyCustom");
+      const groupSel = document.getElementById("groupBySel");
+
+      if (!rangeWrap || !groupWrap || !modeBtn || !exportBtn || !groupSel) return;
+
+      // Prevent double-binding
+      if (rangeWrap.dataset.bound === "1") return;
+      rangeWrap.dataset.bound = "1";
+
+      // Style pills (re-using existing helper)
+      const rangeBtns = [
+        document.getElementById("owRange14"),
+        document.getElementById("owRange30"),
+        document.getElementById("owRange90"),
+        document.getElementById("owRangeAll"),
+        document.getElementById("owRangeCustom"),
+      ].filter(Boolean);
+
+      const groupBtns = [
+        document.getElementById("owGroupDay"),
+        document.getElementById("owGroupWeek"),
+        document.getElementById("owGroupMonth"),
+        document.getElementById("owGroupYear"),
+      ].filter(Boolean);
+
+      for (const b of [...rangeBtns, ...groupBtns, modeBtn, exportBtn]) stylePillButton(b);
+
+      function setActive(btns, activeBtn) {
+        btns.forEach(b => setPillActive(b, b === activeBtn));
+      }
+
+      // Default states
+      setActive(rangeBtns, document.getElementById("owRangeAll") || rangeBtns[0]);
+      setActive(groupBtns, document.getElementById("owGroupDay") || groupBtns[0]);
+      setPillActive(modeBtn, !!visState.cumulative);
+
+      function setRange(mode) {
+        visState.range = mode;
+        if (customBox) customBox.style.display = (mode === "custom") ? "flex" : "none";
+        rerenderFromState();
+      }
+
+      // Range handlers
+      document.getElementById("owRange14")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange14")); setRange("14"); });
+      document.getElementById("owRange30")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange30")); setRange("30"); });
+      document.getElementById("owRange90")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange90")); setRange("90"); });
+      document.getElementById("owRangeAll")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRangeAll")); setRange("all"); });
+      document.getElementById("owRangeCustom")?.addEventListener("click", () => {
+        setActive(rangeBtns, document.getElementById("owRangeCustom"));
+        if (customBox) customBox.style.display = "flex";
+
+        // Pre-fill custom range from data (if possible)
+        const txt = lastMergedCsv || getCurrentMergedCsvText();
+        if (txt) {
+          const rows = parseCsv(txt);
+          const objs = rowsToObjects(rows);
+          const normalized = objs.map(normalizeMergedRow).filter(r => r.project && r.work_date);
+          const dates = normalized.map(r => parseDateish(r.work_date)).filter(Boolean).sort((a, b) => a - b);
+          if (dates.length) {
+            const from = isoDate(dates[0]);
+            const to = isoDate(dates[dates.length - 1]);
+            if (fromInput && !fromInput.value) fromInput.value = from;
+            if (toInput && !toInput.value) toInput.value = to;
+          }
+        }
+
+        visState.range = "custom";
+        rerenderFromState();
+      });
+
+      applyBtn?.addEventListener("click", () => {
+        visState.range = "custom";
+        visState.customFrom = fromInput?.value || "";
+        visState.customTo = toInput?.value || "";
+        rerenderFromState();
+      });
+
+      // Group handlers (drive hidden select to preserve existing logic)
+      function setGroup(v, activeId) {
+        groupSel.value = v;
+        groupSel.dispatchEvent(new Event("change"));
+        setActive(groupBtns, document.getElementById(activeId) || null);
+      }
+      document.getElementById("owGroupDay")?.addEventListener("click", () => setGroup("day", "owGroupDay"));
+      document.getElementById("owGroupWeek")?.addEventListener("click", () => setGroup("week", "owGroupWeek"));
+      document.getElementById("owGroupMonth")?.addEventListener("click", () => setGroup("month", "owGroupMonth"));
+      document.getElementById("owGroupYear")?.addEventListener("click", () => setGroup("year", "owGroupYear"));
+
+      // Mode
+      modeBtn.addEventListener("click", () => {
+        visState.cumulative = !visState.cumulative;
+        setPillActive(modeBtn, !!visState.cumulative);
+        rerenderFromState();
+      });
+
+      // Export
+      exportBtn.addEventListener("click", exportVisualsAsPng);
+    }
+
+    // Init controls once on workbench init
+    initVisControlsOnce();
 
     function resetAll() {
       if (projectsFile) projectsFile.value = "";
