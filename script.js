@@ -1657,7 +1657,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       range: "all",          // "14" | "30" | "90" | "all" | "custom"
       customFrom: "",
       customTo: "",
-      // Mode: "nominal" (default), "cumulative", "frequency"
+      // Mode: "nominal" (default), "cumulative"
       mode: "nominal",
       // Back-compat flag used by existing logic (derived from mode)
       cumulative: false,
@@ -1846,7 +1846,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       const groupWrap = document.getElementById("owGroupPills");
       const modeWrap = document.getElementById("owModePills");
       const modeNominalBtnId = "owModeNominal";
-      const modeFreqBtnId = "owModeFrequency";
       const modeCumuBtnId = "owModeCumulative";
       const exportBtn = document.getElementById("owExportPng");
 
@@ -1864,7 +1863,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       }
 
       const modeNominalBtn = ensureModeBtn(modeNominalBtnId, "Nominal");
-      const modeFreqBtn = ensureModeBtn(modeFreqBtnId, "Frequency");
       const modeBtn = document.getElementById(modeCumuBtnId);
 
       const customBox = document.getElementById("owRangeCustomInputs");
@@ -1940,7 +1938,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       }
 
       if (!rangeWrap || !groupWrap || !exportBtn || !groupSel) return;
-      if (!modeNominalBtn || !modeBtn || !modeFreqBtn) return;
+      if (!modeNominalBtn || !modeBtn) return;
 
       // Prevent double-binding
       if (rangeWrap.dataset.bound === "1") return;
@@ -1962,9 +1960,9 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
         document.getElementById("owGroupYear"),
       ].filter(Boolean);
 
-      const modeBtns = [modeNominalBtn, modeBtn, modeFreqBtn].filter(Boolean);
+      const modeBtns = [modeNominalBtn, modeBtn].filter(Boolean);
 
-      for (const b of [...rangeBtns, ...groupBtns, modeNominalBtn, modeBtn, modeFreqBtn, exportBtn, exportSvgBtn, exportJpgBtn].filter(Boolean)) stylePillButton(b);
+      for (const b of [...rangeBtns, ...groupBtns, modeNominalBtn, modeBtn, exportBtn, exportSvgBtn, exportJpgBtn].filter(Boolean)) stylePillButton(b);
 
       function setActive(btns, activeBtn) {
         btns.forEach(b => setPillActive(b, b === activeBtn));
@@ -1976,8 +1974,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       // Mode defaults to nominal
       if (!visState.mode) visState.mode = "nominal";
       visState.cumulative = (visState.mode === "cumulative");
-      if (visState.mode === "frequency") setActive(modeBtns, modeFreqBtn);
-      else if (visState.mode === "cumulative") setActive(modeBtns, modeBtn);
+      if (visState.mode === "cumulative") setActive(modeBtns, modeBtn);
       else setActive(modeBtns, modeNominalBtn);
 
       // Export pills: default PNG selected (no effect on rendering, only export format)
@@ -2038,17 +2035,16 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       document.getElementById("owGroupMonth")?.addEventListener("click", () => setGroup("month", "owGroupMonth"));
       document.getElementById("owGroupYear")?.addEventListener("click", () => setGroup("year", "owGroupYear"));
 
-      // Mode (radio-style: Nominal (default), Cumulative, Frequency)
+      // Mode (radio-style: Nominal (default), Cumulative)
       function setMode(mode) {
         visState.mode = mode;
         visState.cumulative = (mode === "cumulative"); // back-compat
-        setActive(modeBtns, mode === "frequency" ? modeFreqBtn : (mode === "cumulative" ? modeBtn : modeNominalBtn));
+        setActive(modeBtns, mode === "cumulative" ? modeBtn : modeNominalBtn);
         rerenderFromState();
       }
 
       modeNominalBtn.addEventListener("click", () => setMode("nominal"));
       modeBtn.addEventListener("click", () => setMode("cumulative"));
-      modeFreqBtn.addEventListener("click", () => setMode("frequency"));
 
       // Export
       exportBtn.addEventListener("click", () => { setActiveExport(exportBtn); exportVisualsAsPng(); });
