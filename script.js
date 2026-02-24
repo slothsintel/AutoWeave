@@ -392,13 +392,32 @@
 
       for (const p of projectNames) {
         const item = document.createElement("div");
-        item.title = p;
-        item.style.width = "22px";
-        item.style.height = "12px";
-        item.style.borderRadius = "4px"; // not a circle
-        item.style.background = colorForProject(p, projectNames);
-        item.style.boxShadow = "0 6px 14px rgba(15,31,23,0.12)";
+        item.style.display = "inline-flex";
+        item.style.alignItems = "center";
+        item.style.gap = "8px";
+        item.style.padding = "6px 10px";
+        item.style.borderRadius = "9999px";
         item.style.border = "1px solid rgba(15,31,23,0.10)";
+        item.style.background = "rgba(255,255,255,0.92)";
+        item.title = p;
+
+        const swatch = document.createElement("div");
+        swatch.style.width = "18px";
+        swatch.style.height = "10px";
+        swatch.style.borderRadius = "4px"; // not a circle
+        swatch.style.background = colorForProject(p, projectNames);
+        swatch.style.boxShadow = "0 6px 14px rgba(15,31,23,0.10)";
+        swatch.style.border = "1px solid rgba(15,31,23,0.10)";
+
+        const label = document.createElement("div");
+        label.textContent = p;
+        label.style.fontSize = "0.82rem";
+        label.style.fontWeight = "800";
+        label.style.color = "rgba(15,31,23,0.70)";
+        label.style.whiteSpace = "nowrap";
+
+        item.appendChild(swatch);
+        item.appendChild(label);
         legend.appendChild(item);
       }
 
@@ -1493,6 +1512,19 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       const visRatio = document.getElementById("visRatio");
       if (!visIncome || !visDuration || !visRatio) return;
 
+      // Swap Duration/Income positions in the DOM once (no HTML changes)
+      if (!_owSwappedVisOrder) {
+        try {
+          const pI = visIncome.parentElement;
+          const pD = visDuration.parentElement;
+          if (pI && pI === pD) {
+            // Move duration before income
+            pI.insertBefore(visDuration, visIncome);
+          }
+        } catch (e) {}
+        _owSwappedVisOrder = true;
+      }
+
       if (!normalizedAll.length) {
         clearEl(visIncome); clearEl(visDuration); clearEl(visRatio);
         return;
@@ -1672,6 +1704,10 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       cumulative: false,
     };
 
+    // Visual order: Duration first, then Income, then Ratio (swap in DOM once)
+    let _owSwappedVisOrder = false;
+
+
     function getCurrentMergedCsvText() {
       return (typeof previewMerged.value === "string") ? String(previewMerged.value || "") : String(previewMerged.textContent || "");
     }
@@ -1708,11 +1744,11 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       exportRoot.style.boxSizing = "border-box";
       exportRoot.style.width = `${Math.max(320, card.clientWidth || card.scrollWidth || 320)}px`;
 
-      exportRoot.appendChild(vi.cloneNode(true));
+      exportRoot.appendChild(vd.cloneNode(true));
       const sp1 = document.createElement("div");
       sp1.style.height = "24px";
       exportRoot.appendChild(sp1);
-      exportRoot.appendChild(vd.cloneNode(true));
+      exportRoot.appendChild(vi.cloneNode(true));
       const sp2 = document.createElement("div");
       sp2.style.height = "24px";
       exportRoot.appendChild(sp2);
