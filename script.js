@@ -1429,8 +1429,80 @@
       let hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
       let ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
 
+      // Mode transforms
+      const mode = String(visState.mode || (visState.cumulative ? "cumulative" : "nominal")).toLowerCase();
+      // Keep backwards-compat flag aligned
+      visState.cumulative = (mode === "cumulative");
+
+      // Frequency: count rows per project per bucket (instead of summing income/hours)
+      if (mode === "frequency") {
+        function keyForDate(iso) {
+          const d = parseDateish(iso);
+          if (!d) return iso;
+          if (group === "year") return `${d.getFullYear()}`;
+          if (group === "month") return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          if (group === "week") {
+            const dt = new Date(d);
+            const day = (dt.getDay() + 6) % 7; // Monday=0
+            dt.setDate(dt.getDate() - day);
+            const y = dt.getFullYear();
+            const m = String(dt.getMonth() + 1).padStart(2, "0");
+            const dd = String(dt.getDate()).padStart(2, "0");
+            return `${y}-W${m}${dd}`;
+          }
+          return isoDate(d);
+        }
+
+        const countsByKey = new Map();
+        for (const r of normalized) {
+          const k = keyForDate(r.work_date);
+          if (!countsByKey.has(k)) countsByKey.set(k, { key: k, values: {}, total: 0 });
+          const rec = countsByKey.get(k);
+          rec.values[r.project] = (rec.values[r.project] || 0) + 1;
+          rec.total += 1;
+        }
+
+        // Align to existing buckets order
+        const freqSeries = buckets.map(b => {
+          const rec = countsByKey.get(b.key) || { values: {}, total: 0 };
+          const values = {};
+          for (const p of projectNames) values[p] = Number(rec.values[p] || 0);
+          return { key: b.key, values, total: Number(rec.total || 0) };
+        });
+
+        incomeSeries = freqSeries;
+        hoursSeries = freqSeries;
+        ratioSeries = freqSeries;
+      }
+
+      // Increment: per-bucket delta (current - previous) for each project
+      if (mode === "increment") {
+        function diffSeries(series) {
+          const out = [];
+          let prevValues = null;
+          let prevTotal = null;
+          for (const b of series) {
+            const values = {};
+            for (const p of projectNames) {
+              const cur = Number(b.values[p] || 0);
+              const prev = prevValues ? Number(prevValues[p] || 0) : 0;
+              values[p] = cur - prev;
+            }
+            const curTot = Number(b.total || 0);
+            const prevTot = prevTotal == null ? 0 : Number(prevTotal || 0);
+            out.push({ key: b.key, values, total: curTot - prevTot });
+            prevValues = b.values;
+            prevTotal = b.total;
+          }
+          return out;
+        }
+        incomeSeries = diffSeries(incomeSeries);
+        hoursSeries = diffSeries(hoursSeries);
+        ratioSeries = diffSeries(ratioSeries);
+      }
+
       // Optional cumulative mode
-      if (visState.cumulative) {
+      if (mode === "cumulative") {
         const runIncome = {};
         const runHours = {};
         let runTotalIncome = 0;
@@ -1483,6 +1555,9 @@
       range: "all",          // "14" | "30" | "90" | "all" | "custom"
       customFrom: "",
       customTo: "",
+      // Visualisation mode: nominal (default), cumulative, frequency, increment
+      mode: "nominal",
+      // Backwards-compat flag (kept): true iff mode === "cumulative"
       cumulative: false,
     };
 
@@ -1573,18 +1648,229 @@
       img.src = url;
     }
 
+    function exportVisualsAsSvg() {
+      const card = document.getElementById("visIncome")?.closest(".aw-card") || null;
+      if (!card) return;
+
+      const clone = card.cloneNode(true);
+      clone.querySelectorAll("button, input, select, textarea").forEach(el => {
+        el.style.outline = "none";
+        el.style.boxShadow = "none";
+      });
+
+      const w = Math.max(300, card.scrollWidth);
+      const h = Math.max(200, card.scrollHeight);
+
+      const xmlns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(xmlns, "svg");
+      svg.setAttribute("xmlns", xmlns);
+      svg.setAttribute("width", String(w));
+      svg.setAttribute("height", String(h));
+
+      const fo = document.createElementNS(xmlns, "foreignObject");
+      fo.setAttribute("x", "0");
+      fo.setAttribute("y", "0");
+      fo.setAttribute("width", String(w));
+      fo.setAttribute("height", String(h));
+
+      const wrap = document.createElement("div");
+      wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      wrap.style.width = `${w}px`;
+      wrap.style.height = `${h}px`;
+      wrap.style.background = "white";
+      wrap.style.padding = "14px";
+      wrap.appendChild(clone);
+
+      fo.appendChild(wrap);
+      svg.appendChild(fo);
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+
+      const dl = document.createElement("a");
+      dl.href = URL.createObjectURL(blob);
+      dl.download = "autoweave_visualisations.svg";
+      document.body.appendChild(dl);
+      dl.click();
+      dl.remove();
+      setTimeout(() => URL.revokeObjectURL(dl.href), 5000);
+    }
+
+    function exportVisualsAsJpg() {
+      const card = document.getElementById("visIncome")?.closest(".aw-card") || null;
+      if (!card) return;
+
+      const clone = card.cloneNode(true);
+      clone.querySelectorAll("button, input, select, textarea").forEach(el => {
+        el.style.outline = "none";
+        el.style.boxShadow = "none";
+      });
+
+      const w = Math.max(300, card.scrollWidth);
+      const h = Math.max(200, card.scrollHeight);
+
+      const xmlns = "http://www.w3.org/2000/svg";
+      const svg = document.createElementNS(xmlns, "svg");
+      svg.setAttribute("xmlns", xmlns);
+      svg.setAttribute("width", String(w));
+      svg.setAttribute("height", String(h));
+
+      const fo = document.createElementNS(xmlns, "foreignObject");
+      fo.setAttribute("x", "0");
+      fo.setAttribute("y", "0");
+      fo.setAttribute("width", String(w));
+      fo.setAttribute("height", String(h));
+
+      const wrap = document.createElement("div");
+      wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+      wrap.style.width = `${w}px`;
+      wrap.style.height = `${h}px`;
+      wrap.style.background = "white";
+      wrap.style.padding = "14px";
+      wrap.appendChild(clone);
+
+      fo.appendChild(wrap);
+      svg.appendChild(fo);
+
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        // Ensure opaque white background
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0);
+
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          const dl = document.createElement("a");
+          dl.href = URL.createObjectURL(blob);
+          dl.download = "autoweave_visualisations.jpg";
+          document.body.appendChild(dl);
+          dl.click();
+          dl.remove();
+          setTimeout(() => URL.revokeObjectURL(dl.href), 5000);
+          URL.revokeObjectURL(url);
+        }, "image/jpeg", 0.92);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+
     function initVisControlsOnce() {
       const rangeWrap = document.getElementById("owRangePills");
       const groupWrap = document.getElementById("owGroupPills");
-      const modeBtn = document.getElementById("owModeCumulative");
-      const exportBtn = document.getElementById("owExportPng");
       const customBox = document.getElementById("owRangeCustomInputs");
       const fromInput = document.getElementById("owFromDate");
       const toInput = document.getElementById("owToDate");
       const applyBtn = document.getElementById("owApplyCustom");
       const groupSel = document.getElementById("groupBySel");
 
-      if (!rangeWrap || !groupWrap || !modeBtn || !exportBtn || !groupSel) return;
+      const modeWrap = document.getElementById("owModePills");
+
+      if (!rangeWrap || !groupWrap || !groupSel || !modeWrap) return;
+
+      // --- Ensure Mode buttons exist (nominal default + cumulative + frequency + increment)
+      const ensureBtn = (id, label) => {
+        let b = document.getElementById(id);
+        if (!b) {
+          b = document.createElement("button");
+          b.type = "button";
+          b.id = id;
+          b.textContent = label;
+          modeWrap.appendChild(b);
+        }
+        return b;
+      };
+
+      // If tech.html still includes the old cumulative button, keep it; also add missing ones.
+      const btnNominal = ensureBtn("owModeNominal", "Nominal");
+      const btnCumulative = ensureBtn("owModeCumulative", "Cumulative");
+      const btnFrequency = ensureBtn("owModeFrequency", "Frequency");
+      const btnIncrement = ensureBtn("owModeIncrement", "Increment");
+
+      // --- Ensure Export row exists (PNG / SVG / JPG) on a NEW ROW
+      // Move the existing Export PNG button (if present) out of Mode pills into Export pills.
+      let exportRow = document.getElementById("owExportRow");
+      let exportPills = document.getElementById("owExportPills");
+
+      if (!exportRow) {
+        exportRow = document.createElement("div");
+        exportRow.id = "owExportRow";
+        exportRow.style.display = "flex";
+        exportRow.style.flexWrap = "wrap";
+        exportRow.style.gap = "0.5rem";
+        exportRow.style.alignItems = "center";
+
+        const label = document.createElement("div");
+        label.style.minWidth = "110px";
+        label.style.fontSize = "0.78rem";
+        label.style.letterSpacing = "0.06em";
+        label.style.fontWeight = "800";
+        label.style.color = "rgba(15,31,23,0.55)";
+        label.style.textTransform = "uppercase";
+        label.textContent = "Export";
+
+        exportPills = document.createElement("div");
+        exportPills.id = "owExportPills";
+        exportPills.style.display = "flex";
+        exportPills.style.flexWrap = "wrap";
+        exportPills.style.gap = "0.5rem";
+
+        exportRow.appendChild(label);
+        exportRow.appendChild(exportPills);
+
+        // Insert export row right AFTER the mode row container
+        // (modeWrap lives inside the same row; use nearest form-row container)
+        const row = modeWrap.closest("div");
+        if (row && row.parentElement) {
+          row.parentElement.appendChild(exportRow);
+        }
+      }
+
+      const moveOrCreateExportBtn = (oldId, newId, label) => {
+        let b = document.getElementById(newId);
+        if (b) return b;
+
+        const old = document.getElementById(oldId);
+        if (old && exportPills && old.parentElement !== exportPills) {
+          old.id = newId;
+          old.textContent = label;
+          exportPills.appendChild(old);
+          return old;
+        }
+
+        b = document.createElement("button");
+        b.type = "button";
+        b.id = newId;
+        b.textContent = label;
+        exportPills.appendChild(b);
+        return b;
+      };
+
+      const exportPngBtn = moveOrCreateExportBtn("owExportPng", "owExportPng", "PNG");
+      const exportSvgBtn = moveOrCreateExportBtn("owExportSvg", "owExportSvg", "SVG");
+      const exportJpgBtn = moveOrCreateExportBtn("owExportJpg", "owExportJpg", "JPG");
+
+      // Prevent double-binding
+      if (rangeWrap.dataset.bound === "1") return;
+      rangeWrap.dataset.bound = "1";
 
       // Prevent double-binding
       if (rangeWrap.dataset.bound === "1") return;
@@ -1606,7 +1892,7 @@
         document.getElementById("owGroupYear"),
       ].filter(Boolean);
 
-      for (const b of [...rangeBtns, ...groupBtns, modeBtn, exportBtn]) stylePillButton(b);
+      for (const b of [...rangeBtns, ...groupBtns, btnNominal, btnCumulative, btnFrequency, btnIncrement, exportPngBtn, exportSvgBtn, exportJpgBtn]) stylePillButton(b);
 
       function setActive(btns, activeBtn) {
         btns.forEach(b => setPillActive(b, b === activeBtn));
@@ -1615,7 +1901,17 @@
       // Default states
       setActive(rangeBtns, document.getElementById("owRangeAll") || rangeBtns[0]);
       setActive(groupBtns, document.getElementById("owGroupDay") || groupBtns[0]);
-      setPillActive(modeBtn, !!visState.cumulative);
+      // Default mode: nominal
+      if (!visState.mode) visState.mode = "nominal";
+      const allModeBtns = [btnNominal, btnCumulative, btnFrequency, btnIncrement];
+      const pickModeBtn = () => {
+        const m = String(visState.mode || "nominal").toLowerCase();
+        if (m === "cumulative") return btnCumulative;
+        if (m === "frequency") return btnFrequency;
+        if (m === "increment") return btnIncrement;
+        return btnNominal;
+      };
+      setActive(allModeBtns, pickModeBtn());
 
       function setRange(mode) {
         visState.range = mode;
@@ -1670,14 +1966,33 @@
       document.getElementById("owGroupYear")?.addEventListener("click", () => setGroup("year", "owGroupYear"));
 
       // Mode
-      modeBtn.addEventListener("click", () => {
-        visState.cumulative = !visState.cumulative;
-        setPillActive(modeBtn, !!visState.cumulative);
+      const modeBtns = [btnNominal, btnCumulative, btnFrequency, btnIncrement];
+
+      function setMode(m, activeBtn) {
+        visState.mode = String(m || "nominal").toLowerCase();
+        visState.cumulative = (visState.mode === "cumulative"); // keep compat
+        setActive(modeBtns, activeBtn || btnNominal);
         rerenderFromState();
-      });
+      }
+
+      btnNominal.addEventListener("click", () => setMode("nominal", btnNominal));
+      btnCumulative.addEventListener("click", () => setMode("cumulative", btnCumulative));
+      btnFrequency.addEventListener("click", () => setMode("frequency", btnFrequency));
+      btnIncrement.addEventListener("click", () => setMode("increment", btnIncrement));
+
+      // Ensure the initial active state matches current mode
+      (function syncInitialModePill() {
+        const m = String(visState.mode || (visState.cumulative ? "cumulative" : "nominal")).toLowerCase();
+        if (m === "cumulative") setActive(modeBtns, btnCumulative);
+        else if (m === "frequency") setActive(modeBtns, btnFrequency);
+        else if (m === "increment") setActive(modeBtns, btnIncrement);
+        else setActive(modeBtns, btnNominal);
+      })();
 
       // Export
-      exportBtn.addEventListener("click", exportVisualsAsPng);
+      exportPngBtn.addEventListener("click", exportVisualsAsPng);
+      exportSvgBtn.addEventListener("click", exportVisualsAsSvg);
+      exportJpgBtn.addEventListener("click", exportVisualsAsJpg);
     }
 
     // Init controls once on workbench init
