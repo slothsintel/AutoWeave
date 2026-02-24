@@ -366,66 +366,6 @@
     while (el && el.firstChild) el.removeChild(el.firstChild);
   }
 
-
-  function ensureSharedLegend(anchorEl, projectNames) {
-    try {
-      const card = anchorEl ? anchorEl.closest(".aw-card") : null;
-      if (!card) return;
-
-      // Remove existing legend so we always stay in sync with current projects
-      const existing = card.querySelector("#owSharedLegend");
-      if (existing) existing.remove();
-
-      // Place legend above the FIRST figure (Duration)
-      const durationEl = card.querySelector("#visDuration") || card.querySelector("#visIncome") || anchorEl;
-
-      const legend = document.createElement("div");
-      legend.id = "owSharedLegend";
-      legend.style.display = "flex";
-      legend.style.flexWrap = "wrap";
-      legend.style.gap = "10px 12px";
-      legend.style.alignItems = "center";
-      legend.style.padding = "10px 12px";
-      legend.style.margin = "8px 0 12px 0";
-      legend.style.border = "1px solid rgba(15,31,23,0.10)";
-      legend.style.borderRadius = "14px";
-      legend.style.background = "rgba(255,255,255,0.72)";
-
-      for (const p of projectNames) {
-        const item = document.createElement("div");
-        item.style.display = "inline-flex";
-        item.style.alignItems = "center";
-        item.style.gap = "8px";
-        item.style.padding = "6px 10px";
-        item.style.borderRadius = "9999px";
-        item.style.border = "1px solid rgba(15,31,23,0.10)";
-        item.style.background = "rgba(255,255,255,0.92)";
-        item.title = p;
-
-        // Keep legend text, but remove circle/rectangle marker.
-        // Use text colour to reflect the project palette.
-        const label = document.createElement("div");
-        label.textContent = p;
-        label.style.fontSize = "0.82rem";
-        label.style.fontWeight = "800";
-        label.style.color = colorForProject(p, projectNames);
-        label.style.whiteSpace = "nowrap";
-
-        item.appendChild(label);
-        legend.appendChild(item);
-      }
-
-      // Insert legend once for all three figures (above Duration)
-      if (durationEl && durationEl.parentElement) {
-        durationEl.parentElement.insertBefore(legend, durationEl);
-      } else {
-        card.insertBefore(legend, card.firstChild);
-      }
-    } catch (e) {
-      // silent
-    }
-  }
-
   function renderStackedBars(container, data, projectNames, valueKey, title) {
     clearEl(container);
 
@@ -434,30 +374,6 @@
     ]);
 
     container.appendChild(header);
-
-    // Layout: Y-axis + chart area
-    const axisHeight = 160; // px (gives room for tick labels + rotated x labels)
-    const barMaxHeight = 140; // px (kept consistent with existing scaling)
-
-    const wrap = createEl("div", { className: "aw-stacked-wrap" });
-    wrap.style.display = "grid";
-    wrap.style.gridTemplateColumns = "52px 1fr";
-    wrap.style.gap = "10px";
-    wrap.style.alignItems = "start";
-
-    const yAxis = createEl("div", { className: "aw-y-axis" });
-    yAxis.style.position = "relative";
-    yAxis.style.height = `${axisHeight}px`;
-    yAxis.style.marginTop = "8px";
-
-    const yLine = createEl("div");
-    yLine.style.position = "absolute";
-    yLine.style.left = "46px";
-    yLine.style.top = "0";
-    yLine.style.bottom = "18px";
-    yLine.style.width = "1px";
-    yLine.style.background = "rgba(15,31,23,0.14)";
-    yAxis.appendChild(yLine);
 
     const chart = createEl("div", { className: "aw-stacked-chart" });
     chart.style.display = "grid";
@@ -468,66 +384,23 @@
 
     const maxTotal = Math.max(1, ...data.map(d => Number(d.total) || 0));
 
-    // Y-axis ticks
-    const ticks = [1, 0.75, 0.5, 0.25, 0];
-    const fmtY = (v) => {
-      if (valueKey === "count") return String(Math.round(v));
-      if (valueKey === "ratio") return fmtRatio(v);
-      if (valueKey === "hours") return fmtHours(v);
-      return fmtMoney(v);
-    };
-
-    for (const t of ticks) {
-      const v = maxTotal * t;
-      const y = Math.round((1 - t) * barMaxHeight); // relative to bar area
-      const tick = createEl("div");
-      tick.style.position = "absolute";
-      tick.style.left = "0";
-      tick.style.right = "0";
-      tick.style.top = `${y}px`;
-
-      const txt = createEl("div", { textContent: fmtY(v) });
-      txt.style.position = "absolute";
-      txt.style.left = "0";
-      txt.style.transform = "translateY(-50%)";
-      txt.style.fontSize = "0.74rem";
-      txt.style.fontWeight = "800";
-      txt.style.color = "rgba(15,31,23,0.55)";
-      txt.style.whiteSpace = "nowrap";
-
-      const mark = createEl("div");
-      mark.style.position = "absolute";
-      mark.style.left = "44px";
-      mark.style.width = "6px";
-      mark.style.height = "1px";
-      mark.style.background = "rgba(15,31,23,0.14)";
-      mark.style.transform = "translateY(-50%)";
-
-      tick.appendChild(txt);
-      tick.appendChild(mark);
-      yAxis.appendChild(tick);
-    }
-
     for (const d of data) {
       const col = createEl("div", { className: "aw-bar-col" });
       col.style.display = "flex";
       col.style.flexDirection = "column";
       col.style.justifyContent = "flex-end";
       col.style.gap = "6px";
-      col.style.alignItems = "center";
 
       const bar = createEl("div", { className: "aw-bar" });
       bar.style.width = "100%";
-      bar.style.maxWidth = "84px";
-      bar.style.height = `${Math.round((Number(d.total) || 0) / maxTotal * barMaxHeight)}px`;
+      bar.style.height = `${Math.round((Number(d.total) || 0) / maxTotal * 140)}px`;
       bar.style.borderRadius = "12px";
       bar.style.overflow = "hidden";
       bar.style.display = "flex";
       bar.style.flexDirection = "column-reverse";
       bar.style.boxShadow = "0 10px 22px rgba(15,31,23,0.10)";
       bar.style.border = "1px solid rgba(15,31,23,0.10)";
-      bar.title = `${d.key}
-Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueKey === "ratio" ? fmtRatio(d.total) : (valueKey === "hours" ? fmtHours(d.total) : fmtMoney(d.total)))}`;
+      bar.title = `${d.key}\nTotal: ${fmtMoney(d.total)}`;
 
       for (const p of projectNames) {
         const v = Number(d.values?.[p]) || 0;
@@ -537,40 +410,25 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
         seg.style.height = `${pct * 100}%`;
         seg.style.background = colorForProject(p, projectNames);
         seg.style.opacity = "0.85";
-        seg.title = `${p}: ${valueKey === "count" ? String(Math.round(v)) : (valueKey === "ratio" ? fmtRatio(v) : (valueKey === "hours" ? fmtHours(v) : fmtMoney(v)))}`;
+        seg.title = `${p}: ${valueKey === "ratio" ? fmtRatio(v) : (valueKey === "hours" ? fmtHours(v) : fmtMoney(v))}`;
         bar.appendChild(seg);
       }
 
-      // X-axis label (rotate 75 degrees)
-      const labelBox = createEl("div");
-      labelBox.style.height = "86px";
-      labelBox.style.display = "flex";
-      labelBox.style.alignItems = "flex-end";
-      labelBox.style.justifyContent = "center";
-      labelBox.style.overflow = "visible";
-
       const label = createEl("div", { className: "aw-bar-label", textContent: d.key });
       label.style.fontSize = "0.8rem";
-      label.style.textAlign = "left";
+      label.style.textAlign = "center";
       label.style.color = "rgba(15,31,23,0.62)";
       label.style.whiteSpace = "nowrap";
-      label.style.transform = "translateY(6px) rotate(-75deg)";
-      label.style.transformOrigin = "bottom left";
-      label.style.display = "inline-block";
-      label.style.maxWidth = "160px";
-
-      labelBox.appendChild(label);
+      label.style.overflow = "hidden";
+      label.style.textOverflow = "ellipsis";
 
       col.appendChild(bar);
-      col.appendChild(labelBox);
+      col.appendChild(label);
       chart.appendChild(col);
     }
 
-    wrap.appendChild(yAxis);
-    wrap.appendChild(chart);
-    container.appendChild(wrap);
+    container.appendChild(chart);
   }
-
 
   // =========================================================
   // 4) Parse merged CSV stats for visuals
@@ -684,197 +542,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
     return lines.join("\n");
   }
 
-  // =========================================================
-  // 4b) Quick stats (ggplot / tibble-style table render)
-  //   - IMPORTANT: only remakes the Quick stats table
-  //   - No other features/sections touched
-  // =========================================================
-  function renderQuickStatsGgTable(container, csvText) {
-    if (!container) return;
-    // container is a <div> (#statsMerged)
-    container.innerHTML = "";
-
-    // Parse + normalize
-    const rows = parseCsv(csvText || "");
-    const objs = rowsToObjects(rows);
-    const normalized = objs
-      .map(normalizeMergedRow)
-      .filter(r => r.project && r.work_date);
-
-    // Empty state
-    if (!normalized.length) {
-      const empty = document.createElement("div");
-      empty.textContent = "No stats available (merged output has no parsable rows).";
-      empty.style.color = "rgba(15,31,23,0.55)";
-      empty.style.fontSize = "0.95rem";
-      container.appendChild(empty);
-      return;
-    }
-
-    const rowCount = normalized.length;
-    const totalIncome = sum(normalized.map(r => r.income));
-    const totalHours = sum(normalized.map(r => r.duration));
-    const ratio = totalHours > 0 ? (totalIncome / totalHours) : 0;
-
-    // Aggregate by project
-    const byProject = new Map();
-    for (const r of normalized) {
-      if (!byProject.has(r.project)) byProject.set(r.project, { income: 0, hours: 0 });
-      const rec = byProject.get(r.project);
-      rec.income += r.income;
-      rec.hours += r.duration;
-    }
-
-    const projectsSorted = Array.from(byProject.entries())
-      .sort((a, b) => (b[1].income - a[1].income) || (b[1].hours - a[1].hours) || a[0].localeCompare(b[0]));
-
-    // Wrapper (ggplot-like panel)
-    const wrap = document.createElement("div");
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.gap = "10px";
-    wrap.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
-
-    // Mini summary (like tibble header)
-    const head = document.createElement("div");
-    head.style.display = "flex";
-    head.style.flexWrap = "wrap";
-    head.style.gap = "10px";
-    head.style.alignItems = "baseline";
-    head.style.padding = "6px 8px";
-    head.style.border = "1px solid rgba(15,31,23,0.10)";
-    head.style.borderRadius = "12px";
-    head.style.background = "rgba(255,255,255,0.72)";
-
-    const title = document.createElement("div");
-    title.textContent = "Overview";
-    title.style.fontWeight = "800";
-    title.style.letterSpacing = "0.02em";
-    title.style.color = "rgba(15,31,23,0.86)";
-
-    const meta = document.createElement("div");
-    meta.textContent = `Number of projects: ${projectsSorted.length}  |         Number of entries: ${rowCount}`;
-    meta.style.color = "rgba(15,31,23,0.62)";
-    meta.style.fontWeight = "700";
-    meta.style.marginLeft = "auto";
-
-    head.appendChild(title);
-    head.appendChild(meta);
-
-    const kpis = document.createElement("div");
-    kpis.style.display = "grid";
-    kpis.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
-    kpis.style.gap = "8px";
-
-    function kpi(label, value) {
-      const box = document.createElement("div");
-      box.style.padding = "8px";
-      box.style.border = "1px solid rgba(15,31,23,0.10)";
-      box.style.borderRadius = "12px";
-      box.style.background = "rgba(255,255,255,0.72)";
-      const l = document.createElement("div");
-      l.textContent = label;
-      l.style.fontSize = "0.72rem";
-      l.style.letterSpacing = "0.14em";
-      l.style.textTransform = "uppercase";
-      l.style.color = "rgba(15,31,23,0.55)";
-      l.style.fontWeight = "800";
-      const v = document.createElement("div");
-      v.textContent = value;
-      v.style.fontSize = "1.02rem";
-      v.style.fontWeight = "900";
-      v.style.color = "rgba(15,31,23,0.90)";
-      v.style.marginTop = "3px";
-      box.appendChild(l);
-      box.appendChild(v);
-      return box;
-    }
-
-    kpis.appendChild(kpi("Total income (£)", `${fmtMoney(totalIncome)}`));
-    kpis.appendChild(kpi("Total time (h)", `${fmtHours(totalHours)}`));
-    kpis.appendChild(kpi("Average ratio (£/h)", `${fmtRatio(ratio)}`));
-
-    // Table (tibble-like)
-    const tableWrap = document.createElement("div");
-    tableWrap.style.border = "1px solid rgba(15,31,23,0.10)";
-    tableWrap.style.borderRadius = "14px";
-    tableWrap.style.background = "rgba(255,255,255,0.72)";
-    tableWrap.style.overflow = "auto";
-
-    const table = document.createElement("table");
-    table.style.width = "100%";
-    table.style.borderCollapse = "separate";
-    table.style.borderSpacing = "0";
-    table.style.fontSize = "0.92rem";
-
-    const thead = document.createElement("thead");
-    const trh = document.createElement("tr");
-    const headers = [
-      { t: "project", align: "left" },
-      { t: "income (£)", align: "right" },
-      { t: "time (h)", align: "right" },
-      { t: "ratio (£/h)", align: "right" },
-    ];
-    for (const h of headers) {
-      const th = document.createElement("th");
-      th.textContent = h.t;
-      th.style.position = "sticky";
-      th.style.top = "0";
-      th.style.background = "rgba(255,255,255,0.92)";
-      th.style.borderBottom = "1px solid rgba(15,31,23,0.12)";
-      th.style.padding = "10px 10px";
-      th.style.textAlign = h.align;
-      th.style.fontSize = "0.72rem";
-      th.style.letterSpacing = "0.14em";
-      th.style.textTransform = "uppercase";
-      th.style.color = "rgba(15,31,23,0.55)";
-      th.style.fontWeight = "900";
-      trh.appendChild(th);
-    }
-    thead.appendChild(trh);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    projectsSorted.forEach(([name, rec], idx) => {
-      const tr = document.createElement("tr");
-      tr.style.background = idx % 2 === 0 ? "rgba(15,31,23,0.02)" : "transparent";
-
-      const pRatio = rec.hours > 0 ? (rec.income / rec.hours) : 0;
-
-      const cells = [
-        { v: name, align: "left", weight: "800", color: "rgba(15,31,23,0.86)" },
-        { v: `${fmtMoney(rec.income)}`, align: "right" },
-        { v: `${fmtHours(rec.hours)}`, align: "right" },
-        { v: `${fmtRatio(pRatio)}`, align: "right" },
-      ];
-
-      for (const c of cells) {
-        const td = document.createElement("td");
-        td.textContent = c.v;
-        td.style.padding = "10px 10px";
-        td.style.borderBottom = "1px solid rgba(15,31,23,0.08)";
-        td.style.textAlign = c.align || "left";
-        td.style.color = c.color || "rgba(15,31,23,0.75)";
-        td.style.fontWeight = c.weight || "700";
-        td.style.whiteSpace = "nowrap";
-        if (c.align === "left") {
-          td.style.maxWidth = "260px";
-          td.style.overflow = "hidden";
-          td.style.textOverflow = "ellipsis";
-        }
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    tableWrap.appendChild(table);
-
-    wrap.appendChild(head);
-    wrap.appendChild(kpis);
-    wrap.appendChild(tableWrap);
-    container.appendChild(wrap);
-  }
-
 
   function buildDailyProjectSeries(objs, group = "day") {
     const rows = objs
@@ -884,9 +551,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
     function keyForDate(iso) {
       const d = parseDateish(iso);
       if (!d) return iso;
-      if (group === "year") {
-        return `${d.getFullYear()}`;
-      }
       if (group === "month") {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       }
@@ -1487,573 +1151,84 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
     }
 
     function renderVisualsFromMergedCsv(csvText) {
-      // Keep the latest merged CSV so controls can re-render without re-merging
-      lastMergedCsv = String(csvText || "");
-
-      const rows = parseCsv(lastMergedCsv);
+      const rows = parseCsv(csvText);
       const objs = rowsToObjects(rows);
-
-      // Normalize once, then filter by date range
-      const normalizedAll = objs
-        .map(normalizeMergedRow)
-        .filter(r => r.project && r.work_date);
-
-      // If no rows, just clear
-      const visIncome = document.getElementById("visIncome");
-      const visDuration = document.getElementById("visDuration");
-      const visRatio = document.getElementById("visRatio");
-
-      // Equal spacing between 3 figures (no other layout touched)
-      const GAP = 36;
-      visDuration.style.marginBottom = GAP + "px";
-      visIncome.style.marginBottom = GAP + "px";
-      visRatio.style.marginBottom = "0px";
-      if (!visIncome || !visDuration || !visRatio) return;
-
-      // Swap Duration/Income positions in the DOM once (no HTML changes)
-      if (!_owSwappedVisOrder) {
-        try {
-          const pI = visIncome.parentElement;
-          const pD = visDuration.parentElement;
-          if (pI && pI === pD) {
-            // Move duration before income
-            pI.insertBefore(visDuration, visIncome);
-          }
-        } catch (e) {}
-        _owSwappedVisOrder = true;
-      }
-
-      if (!normalizedAll.length) {
-        clearEl(visIncome); clearEl(visDuration); clearEl(visRatio);
-        return;
-      }
-
-      function toDate(iso) {
-        const d = parseDateish(iso);
-        return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
-      }
-
-      function maxDate(rows_) {
-        let mx = null;
-        for (const r of rows_) {
-          const d = toDate(r.work_date);
-          if (!d) continue;
-          if (!mx || d.getTime() > mx.getTime()) mx = d;
-        }
-        return mx;
-      }
-
-      function filterByRange(rows_) {
-        const mode = visState.range;
-
-        if (!mode || mode === "all") return rows_;
-
-        // Determine from/to
-        let from = null;
-        let to = null;
-
-        if (mode === "custom") {
-          from = toDate(visState.customFrom);
-          to = toDate(visState.customTo);
-        } else {
-          const days = Number(mode) || 0; // "14" | "30" | "90"
-          const mx = maxDate(rows_);
-          if (!mx || !days) return rows_;
-          to = mx;
-          from = new Date(mx);
-          from.setDate(from.getDate() - (days - 1));
-        }
-
-        if (!from && !to) return rows_;
-
-        const fromT = from ? from.getTime() : -Infinity;
-        const toT = to ? to.getTime() : Infinity;
-
-        return rows_.filter(r => {
-          const d = toDate(r.work_date);
-          if (!d) return false;
-          const t = d.getTime();
-          return t >= fromT && t <= toT;
-        });
-      }
-
-      const normalized = filterByRange(normalizedAll);
-
-      // Grouping is driven by hidden select for backwards compatibility
       const groupSel = document.getElementById("groupBySel");
       const group = groupSel ? String(groupSel.value || "day") : "day";
 
-      const { projectNames, buckets } = buildDailyProjectSeries(normalized, group);
+      const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
 
-      // Shared legend across all three figures
-      ensureSharedLegend(visIncome, projectNames);
+      // --- Legend wrapper box removal + figure gap normalization (visuals only) ---
+      (function removeLegendWrapperBox() {
+        try {
+          const card = (document.getElementById("visDuration") || document.getElementById("visIncome"))?.closest(".aw-card");
+          const anchor = document.getElementById("visDuration") || document.getElementById("visIncome");
+          if (!card || !anchor) return;
 
-      // Keep mode in sync with the legacy cumulative flag (back-compat)
-      visState.cumulative = (visState.mode === "cumulative");
+          // find the legend container immediately above the first figure (skip spacers)
+          let el = anchor.previousElementSibling;
+          while (el && el.classList && el.classList.contains("spacer-lg")) el = el.previousElementSibling;
 
-      // Build per-bucket series (nominal default)
-      let incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
-      let hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
-      let ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
-
-      // Optional cumulative mode (income + duration; ratio derived)
-      if (visState.cumulative) {
-        const runIncome = {};
-        const runHours = {};
-        let runTotalIncome = 0;
-        let runTotalHours = 0;
-
-        incomeSeries = incomeSeries.map((b) => {
-          const values = { ...b.values };
-          for (const p of projectNames) {
-            runIncome[p] = (runIncome[p] || 0) + (Number(values[p]) || 0);
-            values[p] = runIncome[p];
-          }
-          runTotalIncome += Number(b.total) || 0;
-          return { key: b.key, values, total: runTotalIncome };
-        });
-
-        hoursSeries = hoursSeries.map((b) => {
-          const values = { ...b.values };
-          for (const p of projectNames) {
-            runHours[p] = (runHours[p] || 0) + (Number(values[p]) || 0);
-            values[p] = runHours[p];
-          }
-          runTotalHours += Number(b.total) || 0;
-          return { key: b.key, values, total: runTotalHours };
-        });
-
-        ratioSeries = incomeSeries.map((b, idx) => {
-          const values = {};
-          for (const p of projectNames) {
-            const inc = Number(incomeSeries[idx]?.values?.[p]) || 0;
-            const hrs = Number(hoursSeries[idx]?.values?.[p]) || 0;
-            values[p] = hrs > 0 ? (inc / hrs) : 0;
-          }
-          const totInc = Number(incomeSeries[idx]?.total) || 0;
-          const totHrs = Number(hoursSeries[idx]?.total) || 0;
-          const total = totHrs > 0 ? (totInc / totHrs) : 0;
-          return { key: b.key, values, total };
-        });
-      }
-
-      // Render (mode-aware labels)
-      if (visState.mode === "frequency") {
-        renderStackedBars(visDuration, hoursSeries, projectNames, "count", "Frequency by project");
-        renderStackedBars(visIncome, incomeSeries, projectNames, "count", "Frequency by project");
-        renderStackedBars(visRatio, ratioSeries, projectNames, "count", "Frequency by project");
-      } else {
-        renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Time by project (hours)");
-        renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project (GBP)");
-        renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Ratio by project (GBP/hour)");
-      }
-    }
-
-    // ------------------------------
-    // Visualisation controls wiring
-    // ------------------------------
-    let lastMergedCsv = "";
-    const visState = {
-      range: "all",          // "14" | "30" | "90" | "all" | "custom"
-      customFrom: "",
-      customTo: "",
-      // Mode: "nominal" (default), "cumulative"
-      mode: "nominal",
-      // Back-compat flag used by existing logic (derived from mode)
-      cumulative: false,
-    };
-
-    // Visual order: Duration first, then Income, then Ratio (swap in DOM once)
-    let _owSwappedVisOrder = false;
-
-
-    function getCurrentMergedCsvText() {
-      return (typeof previewMerged.value === "string") ? String(previewMerged.value || "") : String(previewMerged.textContent || "");
-    }
-
-    function rerenderFromState() {
-      const txt = lastMergedCsv || getCurrentMergedCsvText();
-      if (txt) renderVisualsFromMergedCsv(txt);
-    }
-
-    function exportVisualsAsPng() {
-      return exportVisuals("png");
-    }
-
-    function exportVisualsAsSvg() {
-      return exportVisuals("svg");
-    }
-
-    function exportVisualsAsJpg() {
-      return exportVisuals("jpg");
-    }
-
-    function exportVisuals(kind) {
-      // Export ONLY the charts (do NOT include Range/Group/Mode/Export buttons)
-      const vd = document.getElementById("visDuration");
-      const vi = document.getElementById("visIncome");
-      const vr = document.getElementById("visRatio");
-      const card = vi?.closest(".aw-card") || null;
-      if (!vi || !vd || !vr || !card) return;
-
-      // Build an export-only container (charts + spacing)
-      const exportRoot = document.createElement("div");
-      exportRoot.style.background = "white";
-      exportRoot.style.padding = "14px";
-      exportRoot.style.boxSizing = "border-box";
-      exportRoot.style.width = `${Math.max(320, card.clientWidth || card.scrollWidth || 320)}px`;
-
-      exportRoot.appendChild(vd.cloneNode(true));
-      const sp1 = document.createElement("div");
-      sp1.style.height = "24px";
-      exportRoot.appendChild(sp1);
-      exportRoot.appendChild(vi.cloneNode(true));
-      const sp2 = document.createElement("div");
-      sp2.style.height = "24px";
-      exportRoot.appendChild(sp2);
-      exportRoot.appendChild(vr.cloneNode(true));
-
-      // Measure by temporarily mounting off-screen (accurate height)
-      const measurer = document.createElement("div");
-      measurer.style.position = "fixed";
-      measurer.style.left = "-99999px";
-      measurer.style.top = "0";
-      measurer.style.opacity = "0";
-      measurer.style.pointerEvents = "none";
-      measurer.appendChild(exportRoot);
-      document.body.appendChild(measurer);
-
-      const w = Math.max(300, exportRoot.scrollWidth);
-      const h = Math.max(200, exportRoot.scrollHeight);
-
-      measurer.remove();
-
-      // Build a self-contained SVG (foreignObject)
-      const xmlns = "http://www.w3.org/2000/svg";
-      const svg = document.createElementNS(xmlns, "svg");
-      svg.setAttribute("xmlns", xmlns);
-      svg.setAttribute("width", String(w));
-      svg.setAttribute("height", String(h));
-
-      const fo = document.createElementNS(xmlns, "foreignObject");
-      fo.setAttribute("x", "0");
-      fo.setAttribute("y", "0");
-      fo.setAttribute("width", String(w));
-      fo.setAttribute("height", String(h));
-
-      // Wrap exportRoot inside a container with a solid background (consistent export)
-      const wrap = document.createElement("div");
-      wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
-      wrap.style.width = `${w}px`;
-      wrap.style.height = `${h}px`;
-      wrap.style.background = "white";
-      wrap.style.padding = "0";
-      wrap.style.margin = "0";
-      wrap.style.boxSizing = "border-box";
-      wrap.appendChild(exportRoot);
-
-      fo.appendChild(wrap);
-      svg.appendChild(fo);
-
-      const svgData = new XMLSerializer().serializeToString(svg);
-
-      // SVG export (direct)
-      if (kind === "svg") {
-        const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-        const dl = document.createElement("a");
-        dl.href = URL.createObjectURL(blob);
-        dl.download = "autoweave_visualisations.svg";
-        document.body.appendChild(dl);
-        dl.click();
-        dl.remove();
-        setTimeout(() => URL.revokeObjectURL(dl.href), 5000);
-        return;
-      }
-
-      // Raster export (PNG / JPG) via canvas
-      // Use a data: URL (more reliable than blob: URL across browsers)
-      const svgDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgData);
-
-      const img = new Image();
-      // Some browsers are picky about when decoding happens for SVG foreignObject
-      img.decoding = "sync";
-
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        // For JPG, paint a white background first (JPG has no alpha)
-        if (kind === "jpg") {
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
-        ctx.drawImage(img, 0, 0);
-
-        const mime = (kind === "jpg") ? "image/jpeg" : "image/png";
-        const ext = (kind === "jpg") ? "jpg" : "png";
-
-        const triggerDownload = (href) => {
-          const a = document.createElement("a");
-          a.href = href;
-          a.download = `autoweave_visualisations.${ext}`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        };
-
-        // Prefer Blob URL for large exports; fall back to data URL if toBlob is unavailable/null
-        const quality = (kind === "jpg") ? 0.92 : undefined;
-
-        if (canvas.toBlob) {
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const blobUrl = URL.createObjectURL(blob);
-              triggerDownload(blobUrl);
-              setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
-            } else {
-              // Fallback (some environments return null)
-              triggerDownload(canvas.toDataURL(mime, quality));
+          // if we found a container that looks like the project legend, strip wrapper styling
+          if (el && typeof el.textContent === "string" && projectNames && projectNames.length) {
+            const hit = el.textContent.includes(projectNames[0]) || (projectNames[1] && el.textContent.includes(projectNames[1]));
+            if (hit) {
+              el.style.border = "none";
+              el.style.background = "transparent";
+              el.style.padding = "0";
+              el.style.borderRadius = "0";
             }
-          }, mime, quality);
-        } else {
-          triggerDownload(canvas.toDataURL(mime, quality));
-        }
-      };
-
-      img.onerror = () => {
-        // If the SVG foreignObject can't be rasterised (browser limitation),
-        // fall back to downloading the SVG itself (so user still gets an export).
-        const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "autoweave_visualisations.svg";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
-      };
-
-      img.src = svgDataUrl;
-    }
-
-    function initVisControlsOnce() {
-      const rangeWrap = document.getElementById("owRangePills");
-      const groupWrap = document.getElementById("owGroupPills");
-      const modeWrap = document.getElementById("owModePills");
-      const modeNominalBtnId = "owModeNominal";
-      const modeCumuBtnId = "owModeCumulative";
-      const exportBtn = document.getElementById("owExportPng");
-
-      // Ensure mode buttons exist (do NOT remove any existing buttons)
-      function ensureModeBtn(id, label) {
-        let btn = document.getElementById(id);
-        if (!btn && modeWrap) {
-          btn = document.createElement("button");
-          btn.type = "button";
-          btn.id = id;
-          btn.textContent = label;
-          modeWrap.insertBefore(btn, exportBtn || null);
-        }
-        return btn;
-      }
-
-      const modeNominalBtn = ensureModeBtn(modeNominalBtnId, "Nominal");
-      const modeBtn = document.getElementById(modeCumuBtnId);
-
-      const customBox = document.getElementById("owRangeCustomInputs");
-      const fromInput = document.getElementById("owFromDate");
-      const toInput = document.getElementById("owToDate");
-      const applyBtn = document.getElementById("owApplyCustom");
-      const groupSel = document.getElementById("groupBySel");
-
-      // -------------------------------------------------------
-      // Export option row (PNG default, plus SVG/JPG)
-      // - ONLY affects export controls (does not touch mode/range/group)
-      // -------------------------------------------------------
-      let exportPills = document.getElementById("owExportPills");
-      let exportSvgBtn = document.getElementById("owExportSvg");
-      let exportJpgBtn = document.getElementById("owExportJpg");
-
-      if (!exportPills && modeWrap && exportBtn) {
-        // Find the existing MODE row and insert a new EXPORT row right after it
-        const modeRow = modeWrap.closest('div[style*="justify-content:space-between"]') || null;
-        if (modeRow && modeRow.parentElement) {
-          const exportRow = document.createElement("div");
-          exportRow.style.display = "flex";
-          exportRow.style.flexWrap = "wrap";
-          exportRow.style.gap = "0.5rem";
-          exportRow.style.alignItems = "center";
-          exportRow.style.justifyContent = "space-between";
-
-          const exportInner = document.createElement("div");
-          exportInner.style.display = "flex";
-          exportInner.style.flexWrap = "wrap";
-          exportInner.style.gap = "0.5rem";
-          exportInner.style.alignItems = "center";
-
-          const exportLabel = document.createElement("div");
-          exportLabel.style.minWidth = "110px";
-          exportLabel.style.fontSize = "0.78rem";
-          exportLabel.style.letterSpacing = "0.06em";
-          exportLabel.style.fontWeight = "800";
-          exportLabel.style.color = "rgba(15,31,23,0.55)";
-          exportLabel.style.textTransform = "uppercase";
-          exportLabel.textContent = "Export";
-
-          exportPills = document.createElement("div");
-          exportPills.id = "owExportPills";
-          exportPills.style.display = "flex";
-          exportPills.style.flexWrap = "wrap";
-          exportPills.style.gap = "0.5rem";
-
-          // Move existing PNG button out of mode pills into export pills
-          if (exportBtn.parentElement) exportBtn.parentElement.removeChild(exportBtn);
-          exportBtn.textContent = "PNG";
-          exportPills.appendChild(exportBtn);
-
-          // Add SVG + JPG buttons (new)
-          exportSvgBtn = document.createElement("button");
-          exportSvgBtn.type = "button";
-          exportSvgBtn.id = "owExportSvg";
-          exportSvgBtn.textContent = "SVG";
-          exportPills.appendChild(exportSvgBtn);
-
-          exportJpgBtn = document.createElement("button");
-          exportJpgBtn.type = "button";
-          exportJpgBtn.id = "owExportJpg";
-          exportJpgBtn.textContent = "JPG";
-          exportPills.appendChild(exportJpgBtn);
-
-          exportInner.appendChild(exportLabel);
-          exportInner.appendChild(exportPills);
-          exportRow.appendChild(exportInner);
-
-          modeRow.insertAdjacentElement("afterend", exportRow);
-        }
-      }
-
-      if (!rangeWrap || !groupWrap || !exportBtn || !groupSel) return;
-      if (!modeNominalBtn || !modeBtn) return;
-
-      // Prevent double-binding
-      if (rangeWrap.dataset.bound === "1") return;
-      rangeWrap.dataset.bound = "1";
-
-      // Style pills (re-using existing helper)
-      const rangeBtns = [
-        document.getElementById("owRange14"),
-        document.getElementById("owRange30"),
-        document.getElementById("owRange90"),
-        document.getElementById("owRangeAll"),
-        document.getElementById("owRangeCustom"),
-      ].filter(Boolean);
-
-      const groupBtns = [
-        document.getElementById("owGroupDay"),
-        document.getElementById("owGroupWeek"),
-        document.getElementById("owGroupMonth"),
-        document.getElementById("owGroupYear"),
-      ].filter(Boolean);
-
-      const modeBtns = [modeNominalBtn, modeBtn].filter(Boolean);
-
-      for (const b of [...rangeBtns, ...groupBtns, modeNominalBtn, modeBtn, exportBtn, exportSvgBtn, exportJpgBtn].filter(Boolean)) stylePillButton(b);
-
-      function setActive(btns, activeBtn) {
-        btns.forEach(b => setPillActive(b, b === activeBtn));
-      }
-
-      // Default states
-      setActive(rangeBtns, document.getElementById("owRangeAll") || rangeBtns[0]);
-      setActive(groupBtns, document.getElementById("owGroupDay") || groupBtns[0]);
-      // Mode defaults to nominal
-      if (!visState.mode) visState.mode = "nominal";
-      visState.cumulative = (visState.mode === "cumulative");
-      if (visState.mode === "cumulative") setActive(modeBtns, modeBtn);
-      else setActive(modeBtns, modeNominalBtn);
-
-      // Export pills: default PNG selected (no effect on rendering, only export format)
-      const exportBtns = [exportBtn, exportSvgBtn, exportJpgBtn].filter(Boolean);
-      function setActiveExport(activeBtn) {
-        exportBtns.forEach(b => setPillActive(b, b === activeBtn));
-      }
-
-      function setRange(mode) {
-        visState.range = mode;
-        if (customBox) customBox.style.display = (mode === "custom") ? "flex" : "none";
-        rerenderFromState();
-      }
-
-      // Range handlers
-      document.getElementById("owRange14")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange14")); setRange("14"); });
-      document.getElementById("owRange30")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange30")); setRange("30"); });
-      document.getElementById("owRange90")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange90")); setRange("90"); });
-      document.getElementById("owRangeAll")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRangeAll")); setRange("all"); });
-      document.getElementById("owRangeCustom")?.addEventListener("click", () => {
-        setActive(rangeBtns, document.getElementById("owRangeCustom"));
-        if (customBox) customBox.style.display = "flex";
-
-        // Pre-fill custom range from data (if possible)
-        const txt = lastMergedCsv || getCurrentMergedCsvText();
-        if (txt) {
-          const rows = parseCsv(txt);
-          const objs = rowsToObjects(rows);
-          const normalized = objs.map(normalizeMergedRow).filter(r => r.project && r.work_date);
-          const dates = normalized.map(r => parseDateish(r.work_date)).filter(Boolean).sort((a, b) => a - b);
-          if (dates.length) {
-            const from = isoDate(dates[0]);
-            const to = isoDate(dates[dates.length - 1]);
-            if (fromInput && !fromInput.value) fromInput.value = from;
-            if (toInput && !toInput.value) toInput.value = to;
           }
-        }
+        } catch (e) {}
+      })();
 
-        visState.range = "custom";
-        rerenderFromState();
-      });
+      (function normalizeInterFigureGaps() {
+        try {
+          const d = document.getElementById("visDuration");
+          const i = document.getElementById("visIncome");
+          const r = document.getElementById("visRatio");
+          if (!d || !i || !r) return;
 
-      applyBtn?.addEventListener("click", () => {
-        visState.range = "custom";
-        visState.customFrom = fromInput?.value || "";
-        visState.customTo = toInput?.value || "";
-        rerenderFromState();
-      });
+          // Helper: set exactly one spacer height between two nodes; collapse extras.
+          function normalizeBetween(a, b, hPx) {
+            // Collect siblings strictly between a and b
+            const between = [];
+            let cur = a.nextElementSibling;
+            while (cur && cur !== b) {
+              between.push(cur);
+              cur = cur.nextElementSibling;
+            }
 
-      // Group handlers (drive hidden select to preserve existing logic)
-      function setGroup(v, activeId) {
-        groupSel.value = v;
-        groupSel.dispatchEvent(new Event("change"));
-        setActive(groupBtns, document.getElementById(activeId) || null);
-      }
-      document.getElementById("owGroupDay")?.addEventListener("click", () => setGroup("day", "owGroupDay"));
-      document.getElementById("owGroupWeek")?.addEventListener("click", () => setGroup("week", "owGroupWeek"));
-      document.getElementById("owGroupMonth")?.addEventListener("click", () => setGroup("month", "owGroupMonth"));
-      document.getElementById("owGroupYear")?.addEventListener("click", () => setGroup("year", "owGroupYear"));
+            const spacers = between.filter(x => x.classList && x.classList.contains("spacer-lg"));
+            if (!spacers.length) return;
 
-      // Mode (radio-style: Nominal (default), Cumulative)
-      function setMode(mode) {
-        visState.mode = mode;
-        visState.cumulative = (mode === "cumulative"); // back-compat
-        setActive(modeBtns, mode === "cumulative" ? modeBtn : modeNominalBtn);
-        rerenderFromState();
-      }
+            spacers.forEach((sp, idx) => {
+              sp.style.height = (idx === 0) ? (hPx + "px") : "0px";
+              sp.style.margin = "0";
+              sp.style.padding = "0";
+            });
+          }
 
-      modeNominalBtn.addEventListener("click", () => setMode("nominal"));
-      modeBtn.addEventListener("click", () => setMode("cumulative"));
+          // Ensure Duration↔Income and Income↔Ratio use the same spacer height
+          const GAP = 28;
+          normalizeBetween(d, i, GAP);
+          normalizeBetween(i, r, GAP);
+        } catch (e) {}
+      })();
 
-      // Export
-      exportBtn.addEventListener("click", () => { setActiveExport(exportBtn); exportVisualsAsPng(); });
-      exportSvgBtn?.addEventListener("click", () => { setActiveExport(exportSvgBtn); exportVisualsAsSvg(); });
-      exportJpgBtn?.addEventListener("click", () => { setActiveExport(exportJpgBtn); exportVisualsAsJpg(); });
+      const visIncome = document.getElementById("visIncome");
+      const visDuration = document.getElementById("visDuration");
+      const visRatio = document.getElementById("visRatio");
+      if (!visIncome || !visDuration || !visRatio) return;
+
+      const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
+      const incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
+      const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
+
+      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Time by project");
+      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
+      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Ratio by project");
     }
-
-    // Init controls once on workbench init
-    initVisControlsOnce();
 
     function resetAll() {
       if (projectsFile) projectsFile.value = "";
@@ -2061,7 +1236,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       entriesFile.value = "";
 
       setBoxText(previewMerged, "");
-      if (statsMerged) statsMerged.innerHTML = "";
+      setBoxText(statsMerged, "");
       setStatus("");
 
       downloadBtn.style.display = "none";
@@ -2092,7 +1267,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       downloadBtn.style.display = "none";
       downloadBtn.removeAttribute("href");
       setBoxText(previewMerged, "");
-      if (statsMerged) statsMerged.innerHTML = "";
+      setBoxText(statsMerged, "");
       clearVisuals();
 
       setStatus("Uploading files…");
@@ -2118,8 +1293,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
         const csv = data.download_csv;
         setBoxText(previewMerged, csv);
 
-        // Quick stats: ggplot / tibble-like table
-        renderQuickStatsGgTable(statsMerged, csv);
+        setBoxText(statsMerged, buildQuickStatsTextFromMergedCsv(csv));
 
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
