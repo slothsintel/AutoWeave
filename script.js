@@ -610,7 +610,6 @@
     meta.style.fontWeight = "700";
     meta.style.marginLeft = "auto";
 
-    head.appendChild(title);
     head.appendChild(meta);
 
     const kpis = document.createElement("div");
