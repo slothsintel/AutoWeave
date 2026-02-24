@@ -376,7 +376,8 @@
       const existing = card.querySelector("#owSharedLegend");
       if (existing) existing.remove();
 
-      const incomeEl = card.querySelector("#visIncome") || anchorEl;
+      // Place legend above the FIRST figure (Duration)
+      const durationEl = card.querySelector("#visDuration") || card.querySelector("#visIncome") || anchorEl;
 
       const legend = document.createElement("div");
       legend.id = "owSharedLegend";
@@ -388,7 +389,7 @@
       legend.style.margin = "8px 0 12px 0";
       legend.style.border = "1px solid rgba(15,31,23,0.10)";
       legend.style.borderRadius = "14px";
-      legend.style.background = "rgba(255,255,255,0.72)"; 
+      legend.style.background = "rgba(255,255,255,0.72)";
 
       for (const p of projectNames) {
         const item = document.createElement("div");
@@ -401,29 +402,22 @@
         item.style.background = "rgba(255,255,255,0.92)";
         item.title = p;
 
-        const swatch = document.createElement("div");
-        swatch.style.width = "18px";
-        swatch.style.height = "10px";
-        swatch.style.borderRadius = "4px"; // not a circle
-        swatch.style.background = colorForProject(p, projectNames);
-        swatch.style.boxShadow = "0 6px 14px rgba(15,31,23,0.10)";
-        swatch.style.border = "1px solid rgba(15,31,23,0.10)";
-
+        // Keep legend text, but remove circle/rectangle marker.
+        // Use text colour to reflect the project palette.
         const label = document.createElement("div");
         label.textContent = p;
         label.style.fontSize = "0.82rem";
         label.style.fontWeight = "800";
-        label.style.color = "rgba(15,31,23,0.70)";
+        label.style.color = colorForProject(p, projectNames);
         label.style.whiteSpace = "nowrap";
 
-        item.appendChild(swatch);
         item.appendChild(label);
         legend.appendChild(item);
       }
 
-      // Insert legend once for all three figures (above visIncome)
-      if (incomeEl && incomeEl.parentElement) {
-        incomeEl.parentElement.insertBefore(legend, incomeEl);
+      // Insert legend once for all three figures (above Duration)
+      if (durationEl && durationEl.parentElement) {
+        durationEl.parentElement.insertBefore(legend, durationEl);
       } else {
         card.insertBefore(legend, card.firstChild);
       }
@@ -432,8 +426,6 @@
     }
   }
 
-
-  
   function renderStackedBars(container, data, projectNames, valueKey, title) {
     clearEl(container);
 
@@ -1680,13 +1672,13 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
 
       // Render (mode-aware labels)
       if (visState.mode === "frequency") {
-        renderStackedBars(visIncome, incomeSeries, projectNames, "count", "Frequency by project");
         renderStackedBars(visDuration, hoursSeries, projectNames, "count", "Frequency by project");
+        renderStackedBars(visIncome, incomeSeries, projectNames, "count", "Frequency by project");
         renderStackedBars(visRatio, ratioSeries, projectNames, "count", "Frequency by project");
       } else {
-        renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
-        renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
-        renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
+        renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Time by project (hours)");
+        renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project (GBP)");
+        renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Ratio by project (GBP/hour)");
       }
     }
 
@@ -1731,8 +1723,8 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
 
     function exportVisuals(kind) {
       // Export ONLY the charts (do NOT include Range/Group/Mode/Export buttons)
-      const vi = document.getElementById("visIncome");
       const vd = document.getElementById("visDuration");
+      const vi = document.getElementById("visIncome");
       const vr = document.getElementById("visRatio");
       const card = vi?.closest(".aw-card") || null;
       if (!vi || !vd || !vr || !card) return;
