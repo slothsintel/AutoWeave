@@ -385,11 +385,12 @@
       legend.style.flexWrap = "wrap";
       legend.style.gap = "10px 12px";
       legend.style.alignItems = "center";
-      legend.style.padding = "10px 12px";
+      // Legend wrapper box removed (no border/background/padding)
+      legend.style.padding = "0";
       legend.style.margin = "8px 0 12px 0";
-      legend.style.border = "1px solid rgba(15,31,23,0.10)";
-      legend.style.borderRadius = "14px";
-      legend.style.background = "rgba(255,255,255,0.72)";
+      legend.style.border = "none";
+      legend.style.borderRadius = "0";
+      legend.style.background = "transparent";
 
       for (const p of projectNames) {
         const item = document.createElement("div");
@@ -1486,6 +1487,33 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       if (visRatio) clearEl(visRatio);
     }
 
+
+// Keep spacing between the three figures consistent by normalising only the
+// spacer elements that sit BETWEEN the figure containers (no other layout touched).
+function normalizeFigureGap(cardEl, fromId, toId, gapPx) {
+  if (!cardEl) return;
+  const fromEl = cardEl.querySelector(`#${fromId}`);
+  const toEl = cardEl.querySelector(`#${toId}`);
+  if (!fromEl || !toEl) return;
+
+  // Walk siblings between fromEl and toEl and normalise only spacer blocks.
+  let node = fromEl.nextElementSibling;
+  let firstSpacerSeen = false;
+
+  while (node && node !== toEl) {
+    const cls = String(node.className || "");
+    const isSpacer = /\bspacer\b/i.test(cls) || /\bspacer-/.test(cls);
+    if (isSpacer) {
+      // Keep the first spacer at gapPx; collapse any additional spacers to avoid stacking.
+      node.style.height = (firstSpacerSeen ? 0 : gapPx) + "px";
+      node.style.margin = "0";
+      node.style.padding = "0";
+      firstSpacerSeen = true;
+    }
+    node = node.nextElementSibling;
+  }
+}
+
     function renderVisualsFromMergedCsv(csvText) {
       // Keep the latest merged CSV so controls can re-render without re-merging
       lastMergedCsv = String(csvText || "");
@@ -1502,13 +1530,18 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       const visIncome = document.getElementById("visIncome");
       const visDuration = document.getElementById("visDuration");
       const visRatio = document.getElementById("visRatio");
+      if (!visIncome || !visDuration || !visRatio) return;
 
-      // Equal spacing between 3 figures (no other layout touched)
+      // Equalise the gap between figures (Duration↔Income and Income↔Ratio)
       const GAP = 36;
       visDuration.style.marginBottom = GAP + "px";
       visIncome.style.marginBottom = GAP + "px";
       visRatio.style.marginBottom = "0px";
-      if (!visIncome || !visDuration || !visRatio) return;
+
+      // Normalise only the spacer blocks between the figure containers (if present in tech.html)
+      const card = visIncome.closest(".aw-card");
+      normalizeFigureGap(card, "visDuration", "visIncome", GAP);
+      normalizeFigureGap(card, "visIncome", "visRatio", GAP);
 
       // Swap Duration/Income positions in the DOM once (no HTML changes)
       if (!_owSwappedVisOrder) {
