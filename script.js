@@ -1616,61 +1616,74 @@
       }
 
       // Raster export (PNG / JPG) via canvas
-      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(svgBlob);
+      // Use a data: URL (more reliable than blob: URL across browsers)
+      const svgDataUrl = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgData);
 
       const img = new Image();
+      // Some browsers are picky about when decoding happens for SVG foreignObject
+      img.decoding = "sync";
+
       img.onload = () => {
         const canvas = document.createElement("canvas");
         canvas.width = w;
         canvas.height = h;
+
         const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          URL.revokeObjectURL(url);
-          return;
-        }
+        if (!ctx) return;
+
         // For JPG, paint a white background first (JPG has no alpha)
         if (kind === "jpg") {
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
+
         ctx.drawImage(img, 0, 0);
 
         const mime = (kind === "jpg") ? "image/jpeg" : "image/png";
         const ext = (kind === "jpg") ? "jpg" : "png";
 
-        const triggerDownload = (blobOrDataUrl) => {
-          const dl = document.createElement("a");
-          if (typeof blobOrDataUrl === "string") {
-            dl.href = blobOrDataUrl;
-          } else {
-            dl.href = URL.createObjectURL(blobOrDataUrl);
-            setTimeout(() => URL.revokeObjectURL(dl.href), 8000);
-          }
-          dl.download = `autoweave_visualisations.${ext}`;
-          document.body.appendChild(dl);
-          dl.click();
-          dl.remove();
+        const triggerDownload = (href) => {
+          const a = document.createElement("a");
+          a.href = href;
+          a.download = `autoweave_visualisations.${ext}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
         };
 
-        // Prefer Blob download, but fall back to dataURL if toBlob returns null (some browsers)
-        canvas.toBlob((blob) => {
-          try {
+        // Prefer Blob URL for large exports; fall back to data URL if toBlob is unavailable/null
+        const quality = (kind === "jpg") ? 0.92 : undefined;
+
+        if (canvas.toBlob) {
+          canvas.toBlob((blob) => {
             if (blob) {
-              triggerDownload(blob);
+              const blobUrl = URL.createObjectURL(blob);
+              triggerDownload(blobUrl);
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 8000);
             } else {
-              const dataUrl = canvas.toDataURL(mime, kind === "jpg" ? 0.92 : undefined);
-              triggerDownload(dataUrl);
+              // Fallback (some environments return null)
+              triggerDownload(canvas.toDataURL(mime, quality));
             }
-          } finally {
-            URL.revokeObjectURL(url);
-          }
-        }, mime, (kind === "jpg") ? 0.92 : undefined);
-            };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
+          }, mime, quality);
+        } else {
+          triggerDownload(canvas.toDataURL(mime, quality));
+        }
       };
-      img.src = url;
+
+      img.onerror = () => {
+        // If the SVG foreignObject can't be rasterised (browser limitation),
+        // fall back to downloading the SVG itself (so user still gets an export).
+        const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "autoweave_visualisations.svg";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+      };
+
+      img.src = svgDataUrl;
     }
 
     function initVisControlsOnce() {
