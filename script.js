@@ -400,7 +400,7 @@
       bar.style.flexDirection = "column-reverse";
       bar.style.boxShadow = "0 10px 22px rgba(15,31,23,0.10)";
       bar.style.border = "1px solid rgba(15,31,23,0.10)";
-      bar.title = `${d.key}\nTotal: ${fmtMoney(d.total)}`;
+      bar.title = `${d.key}\nTotal: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueKey === "ratio" ? fmtRatio(d.total) : (valueKey === "hours" ? fmtHours(d.total) : fmtMoney(d.total)))}`;
 
       for (const p of projectNames) {
         const v = Number(d.values?.[p]) || 0;
@@ -410,7 +410,7 @@
         seg.style.height = `${pct * 100}%`;
         seg.style.background = colorForProject(p, projectNames);
         seg.style.opacity = "0.85";
-        seg.title = `${p}: ${valueKey === "ratio" ? fmtRatio(v) : (valueKey === "hours" ? fmtHours(v) : fmtMoney(v))}`;
+        seg.title = `${p}: ${valueKey === "count" ? String(Math.round(v)) : (valueKey === "ratio" ? fmtRatio(v) : (valueKey === "hours" ? fmtHours(v) : fmtMoney(v)))}`;
         bar.appendChild(seg);
       }
 
@@ -542,6 +542,197 @@
     return lines.join("\n");
   }
 
+  // =========================================================
+  // 4b) Quick stats (ggplot / tibble-style table render)
+  //   - IMPORTANT: only remakes the Quick stats table
+  //   - No other features/sections touched
+  // =========================================================
+  function renderQuickStatsGgTable(container, csvText) {
+    if (!container) return;
+    // container is a <div> (#statsMerged)
+    container.innerHTML = "";
+
+    // Parse + normalize
+    const rows = parseCsv(csvText || "");
+    const objs = rowsToObjects(rows);
+    const normalized = objs
+      .map(normalizeMergedRow)
+      .filter(r => r.project && r.work_date);
+
+    // Empty state
+    if (!normalized.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "No stats available (merged output has no parsable rows).";
+      empty.style.color = "rgba(15,31,23,0.55)";
+      empty.style.fontSize = "0.95rem";
+      container.appendChild(empty);
+      return;
+    }
+
+    const rowCount = normalized.length;
+    const totalIncome = sum(normalized.map(r => r.income));
+    const totalHours = sum(normalized.map(r => r.duration));
+    const ratio = totalHours > 0 ? (totalIncome / totalHours) : 0;
+
+    // Aggregate by project
+    const byProject = new Map();
+    for (const r of normalized) {
+      if (!byProject.has(r.project)) byProject.set(r.project, { income: 0, hours: 0 });
+      const rec = byProject.get(r.project);
+      rec.income += r.income;
+      rec.hours += r.duration;
+    }
+
+    const projectsSorted = Array.from(byProject.entries())
+      .sort((a, b) => (b[1].income - a[1].income) || (b[1].hours - a[1].hours) || a[0].localeCompare(b[0]));
+
+    // Wrapper (ggplot-like panel)
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "10px";
+    wrap.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+
+    // Mini summary (like tibble header)
+    const head = document.createElement("div");
+    head.style.display = "flex";
+    head.style.flexWrap = "wrap";
+    head.style.gap = "10px";
+    head.style.alignItems = "baseline";
+    head.style.padding = "6px 8px";
+    head.style.border = "1px solid rgba(15,31,23,0.10)";
+    head.style.borderRadius = "12px";
+    head.style.background = "rgba(255,255,255,0.72)";
+
+    const title = document.createElement("div");
+    title.textContent = "Overview";
+    title.style.fontWeight = "800";
+    title.style.letterSpacing = "0.02em";
+    title.style.color = "rgba(15,31,23,0.86)";
+
+    const meta = document.createElement("div");
+    meta.textContent = `Number of projects: ${projectsSorted.length}  |         Number of entries: ${rowCount}`;
+    meta.style.color = "rgba(15,31,23,0.62)";
+    meta.style.fontWeight = "700";
+    meta.style.marginLeft = "auto";
+
+    head.appendChild(title);
+    head.appendChild(meta);
+
+    const kpis = document.createElement("div");
+    kpis.style.display = "grid";
+    kpis.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
+    kpis.style.gap = "8px";
+
+    function kpi(label, value) {
+      const box = document.createElement("div");
+      box.style.padding = "8px";
+      box.style.border = "1px solid rgba(15,31,23,0.10)";
+      box.style.borderRadius = "12px";
+      box.style.background = "rgba(255,255,255,0.72)";
+      const l = document.createElement("div");
+      l.textContent = label;
+      l.style.fontSize = "0.72rem";
+      l.style.letterSpacing = "0.14em";
+      l.style.textTransform = "uppercase";
+      l.style.color = "rgba(15,31,23,0.55)";
+      l.style.fontWeight = "800";
+      const v = document.createElement("div");
+      v.textContent = value;
+      v.style.fontSize = "1.02rem";
+      v.style.fontWeight = "900";
+      v.style.color = "rgba(15,31,23,0.90)";
+      v.style.marginTop = "3px";
+      box.appendChild(l);
+      box.appendChild(v);
+      return box;
+    }
+
+    kpis.appendChild(kpi("Total income (£)", `${fmtMoney(totalIncome)}`));
+    kpis.appendChild(kpi("Total time (h)", `${fmtHours(totalHours)}`));
+    kpis.appendChild(kpi("Average ratio (£/h)", `${fmtRatio(ratio)}`));
+
+    // Table (tibble-like)
+    const tableWrap = document.createElement("div");
+    tableWrap.style.border = "1px solid rgba(15,31,23,0.10)";
+    tableWrap.style.borderRadius = "14px";
+    tableWrap.style.background = "rgba(255,255,255,0.72)";
+    tableWrap.style.overflow = "auto";
+
+    const table = document.createElement("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "separate";
+    table.style.borderSpacing = "0";
+    table.style.fontSize = "0.92rem";
+
+    const thead = document.createElement("thead");
+    const trh = document.createElement("tr");
+    const headers = [
+      { t: "project", align: "left" },
+      { t: "income (£)", align: "right" },
+      { t: "time (h)", align: "right" },
+      { t: "ratio (£/h)", align: "right" },
+    ];
+    for (const h of headers) {
+      const th = document.createElement("th");
+      th.textContent = h.t;
+      th.style.position = "sticky";
+      th.style.top = "0";
+      th.style.background = "rgba(255,255,255,0.92)";
+      th.style.borderBottom = "1px solid rgba(15,31,23,0.12)";
+      th.style.padding = "10px 10px";
+      th.style.textAlign = h.align;
+      th.style.fontSize = "0.72rem";
+      th.style.letterSpacing = "0.14em";
+      th.style.textTransform = "uppercase";
+      th.style.color = "rgba(15,31,23,0.55)";
+      th.style.fontWeight = "900";
+      trh.appendChild(th);
+    }
+    thead.appendChild(trh);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    projectsSorted.forEach(([name, rec], idx) => {
+      const tr = document.createElement("tr");
+      tr.style.background = idx % 2 === 0 ? "rgba(15,31,23,0.02)" : "transparent";
+
+      const pRatio = rec.hours > 0 ? (rec.income / rec.hours) : 0;
+
+      const cells = [
+        { v: name, align: "left", weight: "800", color: "rgba(15,31,23,0.86)" },
+        { v: `${fmtMoney(rec.income)}`, align: "right" },
+        { v: `${fmtHours(rec.hours)}`, align: "right" },
+        { v: `${fmtRatio(pRatio)}`, align: "right" },
+      ];
+
+      for (const c of cells) {
+        const td = document.createElement("td");
+        td.textContent = c.v;
+        td.style.padding = "10px 10px";
+        td.style.borderBottom = "1px solid rgba(15,31,23,0.08)";
+        td.style.textAlign = c.align || "left";
+        td.style.color = c.color || "rgba(15,31,23,0.75)";
+        td.style.fontWeight = c.weight || "700";
+        td.style.whiteSpace = "nowrap";
+        if (c.align === "left") {
+          td.style.maxWidth = "260px";
+          td.style.overflow = "hidden";
+          td.style.textOverflow = "ellipsis";
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    tableWrap.appendChild(table);
+
+    wrap.appendChild(head);
+    wrap.appendChild(kpis);
+    wrap.appendChild(tableWrap);
+    container.appendChild(wrap);
+  }
+
 
   function buildDailyProjectSeries(objs, group = "day") {
     const rows = objs
@@ -551,6 +742,9 @@
     function keyForDate(iso) {
       const d = parseDateish(iso);
       if (!d) return iso;
+      if (group === "year") {
+        return `${d.getFullYear()}`;
+      }
       if (group === "month") {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       }
@@ -1137,9 +1331,6 @@
       return;
     }
 
-    // Init export options (keeps existing UI; only separates Export from Mode)
-    initExportOptionsOnce();
-
     function setStatus(text) {
       statusBox.textContent = text || "";
     }
@@ -1153,23 +1344,223 @@
       if (visRatio) clearEl(visRatio);
     }
 
+    function renderVisualsFromMergedCsv(csvText) {
+      // Keep the latest merged CSV so controls can re-render without re-merging
+      lastMergedCsv = String(csvText || "");
 
-    // =========================================================
-    // Visualisations export options (PNG/SVG/JPG)
-    // - Moves existing Export PNG button out of Mode row
-    // - Adds Export SVG + Export JPG alongside it
-    // - Does not change any other features / flows
-    // =========================================================
-    function buildVisualsExportSvgNode() {
+      const rows = parseCsv(lastMergedCsv);
+      const objs = rowsToObjects(rows);
+
+      // Normalize once, then filter by date range
+      const normalizedAll = objs
+        .map(normalizeMergedRow)
+        .filter(r => r.project && r.work_date);
+
+      // If no rows, just clear
+      const visIncome = document.getElementById("visIncome");
+      const visDuration = document.getElementById("visDuration");
+      const visRatio = document.getElementById("visRatio");
+      if (!visIncome || !visDuration || !visRatio) return;
+
+      if (!normalizedAll.length) {
+        clearEl(visIncome); clearEl(visDuration); clearEl(visRatio);
+        return;
+      }
+
+      function toDate(iso) {
+        const d = parseDateish(iso);
+        return d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
+      }
+
+      function maxDate(rows_) {
+        let mx = null;
+        for (const r of rows_) {
+          const d = toDate(r.work_date);
+          if (!d) continue;
+          if (!mx || d.getTime() > mx.getTime()) mx = d;
+        }
+        return mx;
+      }
+
+      function filterByRange(rows_) {
+        const mode = visState.range;
+
+        if (!mode || mode === "all") return rows_;
+
+        // Determine from/to
+        let from = null;
+        let to = null;
+
+        if (mode === "custom") {
+          from = toDate(visState.customFrom);
+          to = toDate(visState.customTo);
+        } else {
+          const days = Number(mode) || 0; // "14" | "30" | "90"
+          const mx = maxDate(rows_);
+          if (!mx || !days) return rows_;
+          to = mx;
+          from = new Date(mx);
+          from.setDate(from.getDate() - (days - 1));
+        }
+
+        if (!from && !to) return rows_;
+
+        const fromT = from ? from.getTime() : -Infinity;
+        const toT = to ? to.getTime() : Infinity;
+
+        return rows_.filter(r => {
+          const d = toDate(r.work_date);
+          if (!d) return false;
+          const t = d.getTime();
+          return t >= fromT && t <= toT;
+        });
+      }
+
+      const normalized = filterByRange(normalizedAll);
+
+      // Grouping is driven by hidden select for backwards compatibility
+      const groupSel = document.getElementById("groupBySel");
+      const group = groupSel ? String(groupSel.value || "day") : "day";
+
+      const { projectNames, buckets } = buildDailyProjectSeries(normalized, group);
+
+      // Keep mode in sync with the legacy cumulative flag (back-compat)
+      visState.cumulative = (visState.mode === "cumulative");
+
+      // Build per-bucket series (nominal default)
+      let incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
+      let hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
+      let ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
+
+      // Frequency mode (counts of entries per bucket/project)
+      if (visState.mode === "frequency") {
+        function keyForDate(iso) {
+          const d = parseDateish(iso);
+          if (!d) return iso;
+          if (group === "year") {
+            return `${d.getFullYear()}`;
+          }
+          if (group === "month") {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          }
+          if (group === "week") {
+            const dt = new Date(d);
+            const day = (dt.getDay() + 6) % 7; // Monday=0
+            dt.setDate(dt.getDate() - day);
+            const y = dt.getFullYear();
+            const m = String(dt.getMonth() + 1).padStart(2, "0");
+            const dd = String(dt.getDate()).padStart(2, "0");
+            return `${y}-W${m}${dd}`;
+          }
+          return isoDate(d);
+        }
+
+        const byKey = new Map();
+        for (const r of normalized) {
+          const k = keyForDate(r.work_date);
+          if (!byKey.has(k)) byKey.set(k, { key: k, values: {}, total: 0 });
+          const rec = byKey.get(k);
+          rec.values[r.project] = (rec.values[r.project] || 0) + 1;
+          rec.total += 1;
+        }
+        const freq = Array.from(byKey.values()).sort((a, b) => String(a.key).localeCompare(String(b.key)));
+
+        // Use frequency data for all three charts (same layout, different meaning)
+        incomeSeries = freq;
+        hoursSeries = freq;
+        ratioSeries = freq;
+      }
+
+      // Optional cumulative mode (income + duration; ratio derived)
+      if (visState.cumulative) {
+        const runIncome = {};
+        const runHours = {};
+        let runTotalIncome = 0;
+        let runTotalHours = 0;
+
+        incomeSeries = incomeSeries.map((b) => {
+          const values = { ...b.values };
+          for (const p of projectNames) {
+            runIncome[p] = (runIncome[p] || 0) + (Number(values[p]) || 0);
+            values[p] = runIncome[p];
+          }
+          runTotalIncome += Number(b.total) || 0;
+          return { key: b.key, values, total: runTotalIncome };
+        });
+
+        hoursSeries = hoursSeries.map((b) => {
+          const values = { ...b.values };
+          for (const p of projectNames) {
+            runHours[p] = (runHours[p] || 0) + (Number(values[p]) || 0);
+            values[p] = runHours[p];
+          }
+          runTotalHours += Number(b.total) || 0;
+          return { key: b.key, values, total: runTotalHours };
+        });
+
+        ratioSeries = incomeSeries.map((b, idx) => {
+          const values = {};
+          for (const p of projectNames) {
+            const inc = Number(incomeSeries[idx]?.values?.[p]) || 0;
+            const hrs = Number(hoursSeries[idx]?.values?.[p]) || 0;
+            values[p] = hrs > 0 ? (inc / hrs) : 0;
+          }
+          const totInc = Number(incomeSeries[idx]?.total) || 0;
+          const totHrs = Number(hoursSeries[idx]?.total) || 0;
+          const total = totHrs > 0 ? (totInc / totHrs) : 0;
+          return { key: b.key, values, total };
+        });
+      }
+
+      // Render (mode-aware labels)
+      if (visState.mode === "frequency") {
+        renderStackedBars(visIncome, incomeSeries, projectNames, "count", "Frequency by project");
+        renderStackedBars(visDuration, hoursSeries, projectNames, "count", "Frequency by project");
+        renderStackedBars(visRatio, ratioSeries, projectNames, "count", "Frequency by project");
+      } else {
+        renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
+        renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
+        renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
+      }
+    }
+
+    // ------------------------------
+    // Visualisation controls wiring
+    // ------------------------------
+    let lastMergedCsv = "";
+    const visState = {
+      range: "all",          // "14" | "30" | "90" | "all" | "custom"
+      customFrom: "",
+      customTo: "",
+      // Mode: "nominal" (default), "cumulative", "frequency"
+      mode: "nominal",
+      // Back-compat flag used by existing logic (derived from mode)
+      cumulative: false,
+    };
+
+    function getCurrentMergedCsvText() {
+      return (typeof previewMerged.value === "string") ? String(previewMerged.value || "") : String(previewMerged.textContent || "");
+    }
+
+    function rerenderFromState() {
+      const txt = lastMergedCsv || getCurrentMergedCsvText();
+      if (txt) renderVisualsFromMergedCsv(txt);
+    }
+
+    function exportVisualsAsPng() {
+      const anchor = document.getElementById("owExportPng");
       const card = document.getElementById("visIncome")?.closest(".aw-card") || null;
-      if (!card) return null;
+      if (!card) return;
 
+      // Clone to avoid layout shifts (and to strip active focus)
       const clone = card.cloneNode(true);
+      // Ensure controls don't show focus rings in export
       clone.querySelectorAll("button, input, select, textarea").forEach(el => {
         el.style.outline = "none";
         el.style.boxShadow = "none";
       });
 
+      // Measure using the live node (more reliable)
       const w = Math.max(300, card.scrollWidth);
       const h = Math.max(200, card.scrollHeight);
 
@@ -1185,6 +1576,7 @@
       fo.setAttribute("width", String(w));
       fo.setAttribute("height", String(h));
 
+      // Wrap clone inside a container with a solid background (consistent export)
       const wrap = document.createElement("div");
       wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
       wrap.style.width = `${w}px`;
@@ -1195,14 +1587,6 @@
 
       fo.appendChild(wrap);
       svg.appendChild(fo);
-
-      return { svg, w, h };
-    }
-
-    function exportVisualsAsPng() {
-      const built = buildVisualsExportSvgNode();
-      if (!built) return;
-      const { svg, w, h } = built;
 
       const svgData = new XMLSerializer().serializeToString(svg);
       const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
@@ -1235,157 +1619,155 @@
           URL.revokeObjectURL(url);
         }, "image/png");
       };
-      img.onerror = () => URL.revokeObjectURL(url);
-      img.src = url;
-    }
-
-    function exportVisualsAsSvg() {
-      const built = buildVisualsExportSvgNode();
-      if (!built) return;
-      const { svg } = built;
-
-      const svgData = new XMLSerializer().serializeToString(svg);
-      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(svgBlob);
-
-      const dl = document.createElement("a");
-      dl.href = url;
-      dl.download = "autoweave_visualisations.svg";
-      document.body.appendChild(dl);
-      dl.click();
-      dl.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
-
-    function exportVisualsAsJpg() {
-      const built = buildVisualsExportSvgNode();
-      if (!built) return;
-      const { svg, w, h } = built;
-
-      const svgData = new XMLSerializer().serializeToString(svg);
-      const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
-      const url = URL.createObjectURL(svgBlob);
-
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0);
-
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            URL.revokeObjectURL(url);
-            return;
-          }
-          const dl = document.createElement("a");
-          dl.href = URL.createObjectURL(blob);
-          dl.download = "autoweave_visualisations.jpg";
-          document.body.appendChild(dl);
-          dl.click();
-          dl.remove();
-          setTimeout(() => URL.revokeObjectURL(dl.href), 5000);
-          URL.revokeObjectURL(url);
-        }, "image/jpeg", 0.92);
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
       };
-      img.onerror = () => URL.revokeObjectURL(url);
       img.src = url;
     }
 
-    function ensureExportOptionRow() {
+    function initVisControlsOnce() {
+      const rangeWrap = document.getElementById("owRangePills");
+      const groupWrap = document.getElementById("owGroupPills");
+      const modeWrap = document.getElementById("owModePills");
+      const modeNominalBtnId = "owModeNominal";
+      const modeFreqBtnId = "owModeFrequency";
+      const modeCumuBtnId = "owModeCumulative";
       const exportBtn = document.getElementById("owExportPng");
-      const modePills = document.getElementById("owModePills");
-      if (!exportBtn || !modePills) return;
-      if (document.getElementById("owExportPills")) return;
 
-      const modeRow = modePills.closest('div[style*="justify-content:space-between"]') || modePills.parentElement;
-      if (!modeRow || !modeRow.parentElement) return;
+      // Ensure mode buttons exist (do NOT remove any existing buttons)
+      function ensureModeBtn(id, label) {
+        let btn = document.getElementById(id);
+        if (!btn && modeWrap) {
+          btn = document.createElement("button");
+          btn.type = "button";
+          btn.id = id;
+          btn.textContent = label;
+          modeWrap.insertBefore(btn, exportBtn || null);
+        }
+        return btn;
+      }
 
-      const exportRow = modeRow.cloneNode(true);
+      const modeNominalBtn = ensureModeBtn(modeNominalBtnId, "Nominal");
+      const modeFreqBtn = ensureModeBtn(modeFreqBtnId, "Frequency");
+      const modeBtn = document.getElementById(modeCumuBtnId);
 
-      const label = exportRow.querySelector('div[style*="text-transform:uppercase"]');
-      if (label) label.textContent = "Export";
-
-      const pills = exportRow.querySelector("#owModePills") || exportRow.querySelector('div[style*="gap:0.5rem"]');
-      if (!pills) return;
-
-      pills.innerHTML = "";
-      pills.id = "owExportPills";
-
-      // Move existing PNG button out of Mode
-      if (exportBtn.parentElement) exportBtn.parentElement.removeChild(exportBtn);
-      pills.appendChild(exportBtn);
-
-      // Add SVG + JPG options, styled identically
-      const mk = (id, text) => {
-        const b = exportBtn.cloneNode(true);
-        b.id = id;
-        b.textContent = text;
-        return b;
-      };
-      const btnSvg = mk("owExportSvg", "Export SVG");
-      const btnJpg = mk("owExportJpg", "Export JPG");
-      pills.appendChild(btnSvg);
-      pills.appendChild(btnJpg);
-
-      // Insert right after the Mode row
-      modeRow.parentElement.insertBefore(exportRow, modeRow.nextSibling);
-    }
-
-    function initExportOptionsOnce() {
-      const modePills = document.getElementById("owModePills");
-      if (!modePills) return;
-
-      ensureExportOptionRow();
-
-      const pngBtn = document.getElementById("owExportPng");
-      const svgBtn = document.getElementById("owExportSvg");
-      const jpgBtn = document.getElementById("owExportJpg");
-
-      if (!pngBtn) return;
-
-      // Prevent double binding
-      if (pngBtn.dataset.bound === "1") return;
-      pngBtn.dataset.bound = "1";
-
-      // Ensure all export buttons are styled like existing pills
-      stylePillButton(pngBtn);
-      if (svgBtn) stylePillButton(svgBtn);
-      if (jpgBtn) stylePillButton(jpgBtn);
-
-      pngBtn.addEventListener("click", exportVisualsAsPng);
-      if (svgBtn) svgBtn.addEventListener("click", exportVisualsAsSvg);
-      if (jpgBtn) jpgBtn.addEventListener("click", exportVisualsAsJpg);
-    }
-
-    function renderVisualsFromMergedCsv(csvText) {
-      const rows = parseCsv(csvText);
-      const objs = rowsToObjects(rows);
+      const customBox = document.getElementById("owRangeCustomInputs");
+      const fromInput = document.getElementById("owFromDate");
+      const toInput = document.getElementById("owToDate");
+      const applyBtn = document.getElementById("owApplyCustom");
       const groupSel = document.getElementById("groupBySel");
-      const group = groupSel ? String(groupSel.value || "day") : "day";
 
-      const { projectNames, buckets } = buildDailyProjectSeries(objs, group);
+      if (!rangeWrap || !groupWrap || !exportBtn || !groupSel) return;
+      if (!modeNominalBtn || !modeBtn || !modeFreqBtn) return;
 
-      const visIncome = document.getElementById("visIncome");
-      const visDuration = document.getElementById("visDuration");
-      const visRatio = document.getElementById("visRatio");
-      if (!visIncome || !visDuration || !visRatio) return;
+      // Prevent double-binding
+      if (rangeWrap.dataset.bound === "1") return;
+      rangeWrap.dataset.bound = "1";
 
-      const incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
-      const hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
-      const ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
+      // Style pills (re-using existing helper)
+      const rangeBtns = [
+        document.getElementById("owRange14"),
+        document.getElementById("owRange30"),
+        document.getElementById("owRange90"),
+        document.getElementById("owRangeAll"),
+        document.getElementById("owRangeCustom"),
+      ].filter(Boolean);
 
-      renderStackedBars(visIncome, incomeSeries, projectNames, "money", "Income by project");
-      renderStackedBars(visDuration, hoursSeries, projectNames, "hours", "Duration by project");
-      renderStackedBars(visRatio, ratioSeries, projectNames, "ratio", "Income / Duration by project");
+      const groupBtns = [
+        document.getElementById("owGroupDay"),
+        document.getElementById("owGroupWeek"),
+        document.getElementById("owGroupMonth"),
+        document.getElementById("owGroupYear"),
+      ].filter(Boolean);
+
+      const modeBtns = [modeNominalBtn, modeBtn, modeFreqBtn].filter(Boolean);
+
+      for (const b of [...rangeBtns, ...groupBtns, modeNominalBtn, modeBtn, modeFreqBtn, exportBtn]) stylePillButton(b);
+
+      function setActive(btns, activeBtn) {
+        btns.forEach(b => setPillActive(b, b === activeBtn));
+      }
+
+      // Default states
+      setActive(rangeBtns, document.getElementById("owRangeAll") || rangeBtns[0]);
+      setActive(groupBtns, document.getElementById("owGroupDay") || groupBtns[0]);
+      // Mode defaults to nominal
+      if (!visState.mode) visState.mode = "nominal";
+      visState.cumulative = (visState.mode === "cumulative");
+      if (visState.mode === "frequency") setActive(modeBtns, modeFreqBtn);
+      else if (visState.mode === "cumulative") setActive(modeBtns, modeBtn);
+      else setActive(modeBtns, modeNominalBtn);
+
+      function setRange(mode) {
+        visState.range = mode;
+        if (customBox) customBox.style.display = (mode === "custom") ? "flex" : "none";
+        rerenderFromState();
+      }
+
+      // Range handlers
+      document.getElementById("owRange14")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange14")); setRange("14"); });
+      document.getElementById("owRange30")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange30")); setRange("30"); });
+      document.getElementById("owRange90")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRange90")); setRange("90"); });
+      document.getElementById("owRangeAll")?.addEventListener("click", () => { setActive(rangeBtns, document.getElementById("owRangeAll")); setRange("all"); });
+      document.getElementById("owRangeCustom")?.addEventListener("click", () => {
+        setActive(rangeBtns, document.getElementById("owRangeCustom"));
+        if (customBox) customBox.style.display = "flex";
+
+        // Pre-fill custom range from data (if possible)
+        const txt = lastMergedCsv || getCurrentMergedCsvText();
+        if (txt) {
+          const rows = parseCsv(txt);
+          const objs = rowsToObjects(rows);
+          const normalized = objs.map(normalizeMergedRow).filter(r => r.project && r.work_date);
+          const dates = normalized.map(r => parseDateish(r.work_date)).filter(Boolean).sort((a, b) => a - b);
+          if (dates.length) {
+            const from = isoDate(dates[0]);
+            const to = isoDate(dates[dates.length - 1]);
+            if (fromInput && !fromInput.value) fromInput.value = from;
+            if (toInput && !toInput.value) toInput.value = to;
+          }
+        }
+
+        visState.range = "custom";
+        rerenderFromState();
+      });
+
+      applyBtn?.addEventListener("click", () => {
+        visState.range = "custom";
+        visState.customFrom = fromInput?.value || "";
+        visState.customTo = toInput?.value || "";
+        rerenderFromState();
+      });
+
+      // Group handlers (drive hidden select to preserve existing logic)
+      function setGroup(v, activeId) {
+        groupSel.value = v;
+        groupSel.dispatchEvent(new Event("change"));
+        setActive(groupBtns, document.getElementById(activeId) || null);
+      }
+      document.getElementById("owGroupDay")?.addEventListener("click", () => setGroup("day", "owGroupDay"));
+      document.getElementById("owGroupWeek")?.addEventListener("click", () => setGroup("week", "owGroupWeek"));
+      document.getElementById("owGroupMonth")?.addEventListener("click", () => setGroup("month", "owGroupMonth"));
+      document.getElementById("owGroupYear")?.addEventListener("click", () => setGroup("year", "owGroupYear"));
+
+      // Mode (radio-style: Nominal (default), Cumulative, Frequency)
+      function setMode(mode) {
+        visState.mode = mode;
+        visState.cumulative = (mode === "cumulative"); // back-compat
+        setActive(modeBtns, mode === "frequency" ? modeFreqBtn : (mode === "cumulative" ? modeBtn : modeNominalBtn));
+        rerenderFromState();
+      }
+
+      modeNominalBtn.addEventListener("click", () => setMode("nominal"));
+      modeBtn.addEventListener("click", () => setMode("cumulative"));
+      modeFreqBtn.addEventListener("click", () => setMode("frequency"));
+
+      // Export
+      exportBtn.addEventListener("click", exportVisualsAsPng);
     }
+
+    // Init controls once on workbench init
+    initVisControlsOnce();
 
     function resetAll() {
       if (projectsFile) projectsFile.value = "";
@@ -1393,7 +1775,7 @@
       entriesFile.value = "";
 
       setBoxText(previewMerged, "");
-      setBoxText(statsMerged, "");
+      if (statsMerged) statsMerged.innerHTML = "";
       setStatus("");
 
       downloadBtn.style.display = "none";
@@ -1424,7 +1806,7 @@
       downloadBtn.style.display = "none";
       downloadBtn.removeAttribute("href");
       setBoxText(previewMerged, "");
-      setBoxText(statsMerged, "");
+      if (statsMerged) statsMerged.innerHTML = "";
       clearVisuals();
 
       setStatus("Uploading files…");
@@ -1450,7 +1832,8 @@
         const csv = data.download_csv;
         setBoxText(previewMerged, csv);
 
-        setBoxText(statsMerged, buildQuickStatsTextFromMergedCsv(csv));
+        // Quick stats: ggplot / tibble-like table
+        renderQuickStatsGgTable(statsMerged, csv);
 
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
         const url = URL.createObjectURL(blob);
