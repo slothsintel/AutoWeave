@@ -1502,6 +1502,12 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       const visIncome = document.getElementById("visIncome");
       const visDuration = document.getElementById("visDuration");
       const visRatio = document.getElementById("visRatio");
+
+      // Equal spacing between 3 figures (no other layout touched)
+      const GAP = 36;
+      visDuration.style.marginBottom = GAP + "px";
+      visIncome.style.marginBottom = GAP + "px";
+      visRatio.style.marginBottom = "0px";
       if (!visIncome || !visDuration || !visRatio) return;
 
       // Swap Duration/Income positions in the DOM once (no HTML changes)
@@ -1589,45 +1595,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       let incomeSeries = buckets.map(b => ({ key: b.key, values: b.valuesIncome, total: b.totalIncome }));
       let hoursSeries = buckets.map(b => ({ key: b.key, values: b.valuesHours, total: b.totalHours }));
       let ratioSeries = buckets.map(b => ({ key: b.key, values: b.valuesRatio, total: b.totalRatio }));
-
-      // Frequency mode (counts of entries per bucket/project)
-      if (visState.mode === "frequency") {
-        function keyForDate(iso) {
-          const d = parseDateish(iso);
-          if (!d) return iso;
-          if (group === "year") {
-            return `${d.getFullYear()}`;
-          }
-          if (group === "month") {
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-          }
-          if (group === "week") {
-            const dt = new Date(d);
-            const day = (dt.getDay() + 6) % 7; // Monday=0
-            dt.setDate(dt.getDate() - day);
-            const y = dt.getFullYear();
-            const m = String(dt.getMonth() + 1).padStart(2, "0");
-            const dd = String(dt.getDate()).padStart(2, "0");
-            return `${y}-W${m}${dd}`;
-          }
-          return isoDate(d);
-        }
-
-        const byKey = new Map();
-        for (const r of normalized) {
-          const k = keyForDate(r.work_date);
-          if (!byKey.has(k)) byKey.set(k, { key: k, values: {}, total: 0 });
-          const rec = byKey.get(k);
-          rec.values[r.project] = (rec.values[r.project] || 0) + 1;
-          rec.total += 1;
-        }
-        const freq = Array.from(byKey.values()).sort((a, b) => String(a.key).localeCompare(String(b.key)));
-
-        // Use frequency data for all three charts (same layout, different meaning)
-        incomeSeries = freq;
-        hoursSeries = freq;
-        ratioSeries = freq;
-      }
 
       // Optional cumulative mode (income + duration; ratio derived)
       if (visState.cumulative) {
