@@ -1560,20 +1560,44 @@
     }
 
     function exportVisuals(kind) {
-      const card = document.getElementById("visIncome")?.closest(".aw-card") || null;
-      if (!card) return;
+      // Export ONLY the charts (do NOT include Range/Group/Mode/Export buttons)
+      const vi = document.getElementById("visIncome");
+      const vd = document.getElementById("visDuration");
+      const vr = document.getElementById("visRatio");
+      const card = vi?.closest(".aw-card") || null;
+      if (!vi || !vd || !vr || !card) return;
 
-      // Clone to avoid layout shifts (and to strip active focus)
-      const clone = card.cloneNode(true);
-      // Ensure controls don't show focus rings in export
-      clone.querySelectorAll("button, input, select, textarea").forEach(el => {
-        el.style.outline = "none";
-        el.style.boxShadow = "none";
-      });
+      // Build an export-only container (charts + spacing)
+      const exportRoot = document.createElement("div");
+      exportRoot.style.background = "white";
+      exportRoot.style.padding = "14px";
+      exportRoot.style.boxSizing = "border-box";
+      exportRoot.style.width = `${Math.max(320, card.clientWidth || card.scrollWidth || 320)}px`;
 
-      // Measure using the live node (more reliable)
-      const w = Math.max(300, card.scrollWidth);
-      const h = Math.max(200, card.scrollHeight);
+      exportRoot.appendChild(vi.cloneNode(true));
+      const sp1 = document.createElement("div");
+      sp1.style.height = "24px";
+      exportRoot.appendChild(sp1);
+      exportRoot.appendChild(vd.cloneNode(true));
+      const sp2 = document.createElement("div");
+      sp2.style.height = "24px";
+      exportRoot.appendChild(sp2);
+      exportRoot.appendChild(vr.cloneNode(true));
+
+      // Measure by temporarily mounting off-screen (accurate height)
+      const measurer = document.createElement("div");
+      measurer.style.position = "fixed";
+      measurer.style.left = "-99999px";
+      measurer.style.top = "0";
+      measurer.style.opacity = "0";
+      measurer.style.pointerEvents = "none";
+      measurer.appendChild(exportRoot);
+      document.body.appendChild(measurer);
+
+      const w = Math.max(300, exportRoot.scrollWidth);
+      const h = Math.max(200, exportRoot.scrollHeight);
+
+      measurer.remove();
 
       // Build a self-contained SVG (foreignObject)
       const xmlns = "http://www.w3.org/2000/svg";
@@ -1588,14 +1612,16 @@
       fo.setAttribute("width", String(w));
       fo.setAttribute("height", String(h));
 
-      // Wrap clone inside a container with a solid background (consistent export)
+      // Wrap exportRoot inside a container with a solid background (consistent export)
       const wrap = document.createElement("div");
       wrap.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
       wrap.style.width = `${w}px`;
       wrap.style.height = `${h}px`;
       wrap.style.background = "white";
-      wrap.style.padding = "14px";
-      wrap.appendChild(clone);
+      wrap.style.padding = "0";
+      wrap.style.margin = "0";
+      wrap.style.boxSizing = "border-box";
+      wrap.appendChild(exportRoot);
 
       fo.appendChild(wrap);
       svg.appendChild(fo);
