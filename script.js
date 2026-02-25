@@ -593,7 +593,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       labelBox.style.height = "86px";
       labelBox.style.display = "flex";
       labelBox.style.alignItems = "flex-end";
-      labelBox.style.justifyContent = "flex-end";
+      labelBox.style.justifyContent = "flex-start";
       labelBox.style.overflow = "visible";
 
       const label = createEl("div", { className: "aw-bar-label", textContent: d.key });
