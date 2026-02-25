@@ -397,21 +397,27 @@
         item.style.display = "inline-flex";
         item.style.alignItems = "center";
         item.style.gap = "8px";
-        item.style.padding = "6px 10px";
-        item.style.borderRadius = "9999px";
-        item.style.border = "1px solid rgba(15,31,23,0.10)";
-        item.style.background = "rgba(255,255,255,0.92)";
+        item.style.padding = "0";
+        item.style.border = "none";
+        item.style.background = "transparent";
         item.title = p;
 
-        // Keep legend text, but remove circle/rectangle marker.
-        // Use text colour to reflect the project palette.
+        // ggplot-like key (small coloured square) + label
+        const key = document.createElement("div");
+        key.style.width = "10px";
+        key.style.height = "10px";
+        key.style.borderRadius = "2px";
+        key.style.background = colorForProject(p, projectNames);
+        key.style.border = "1px solid rgba(15,31,23,0.20)";
+
         const label = document.createElement("div");
         label.textContent = p;
         label.style.fontSize = "0.82rem";
         label.style.fontWeight = "800";
-        label.style.color = colorForProject(p, projectNames);
+        label.style.color = "rgba(15,31,23,0.82)";
         label.style.whiteSpace = "nowrap";
 
+        item.appendChild(key);
         item.appendChild(label);
         legend.appendChild(item);
       }
@@ -436,11 +442,31 @@
 
     container.appendChild(header);
 
+    // ggplot-like header
+    try {
+      header.style.margin = "0 0 8px 0";
+      header.style.padding = "0";
+      const t = header.querySelector(".aw-vis-title");
+      if (t) {
+        t.style.fontSize = "0.92rem";
+        t.style.fontWeight = "900";
+        t.style.letterSpacing = "0.08em";
+        t.style.textTransform = "uppercase";
+        t.style.color = "rgba(15,31,23,0.62)";
+      }
+    } catch (_) {}
+
     // Layout: Y-axis + chart area
     const axisHeight = 160; // px (gives room for tick labels + rotated x labels)
     const barMaxHeight = 140; // px (kept consistent with existing scaling)
 
     const wrap = createEl("div", { className: "aw-stacked-wrap" });
+    // ggplot panel frame (light grey background, subtle border)
+    wrap.style.border = "1px solid rgba(15,31,23,0.12)";
+    wrap.style.borderRadius = "16px";
+    wrap.style.background = "rgba(248,248,248,0.90)";
+    wrap.style.boxShadow = "0 10px 24px rgba(15,31,23,0.08)";
+    wrap.style.padding = "12px 12px 10px 12px";
     wrap.style.display = "grid";
     wrap.style.gridTemplateColumns = "52px 1fr";
     wrap.style.gap = "10px";
@@ -448,6 +474,7 @@
 
     const yAxis = createEl("div", { className: "aw-y-axis" });
     yAxis.style.position = "relative";
+    yAxis.style.opacity = "0.92";
     yAxis.style.height = `${axisHeight}px`;
     yAxis.style.marginTop = "8px";
 
@@ -461,6 +488,15 @@
     yAxis.appendChild(yLine);
 
     const chart = createEl("div", { className: "aw-stacked-chart" });
+    // ggplot-like plot background with light major grid
+    chart.style.border = "1px solid rgba(15,31,23,0.10)";
+    chart.style.borderRadius = "14px";
+    chart.style.background = [
+      "linear-gradient(to bottom, rgba(15,31,23,0.05) 1px, transparent 1px) 0 0 / 100% 28px",
+      "linear-gradient(to right, rgba(15,31,23,0.04) 1px, transparent 1px) 0 0 / 60px 100%",
+      "rgba(255,255,255,0.92)",
+    ].join(",");
+    chart.style.padding = "10px 8px 4px 8px";
     chart.style.display = "grid";
     chart.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
     chart.style.gap = "8px";
@@ -521,11 +557,11 @@
       bar.style.width = "100%";
       bar.style.maxWidth = "84px";
       bar.style.height = `${Math.round((Number(d.total) || 0) / maxTotal * barMaxHeight)}px`;
-      bar.style.borderRadius = "12px";
+      bar.style.borderRadius = "6px";
       bar.style.overflow = "hidden";
       bar.style.display = "flex";
       bar.style.flexDirection = "column-reverse";
-      bar.style.boxShadow = "0 10px 22px rgba(15,31,23,0.10)";
+      bar.style.boxShadow = "none";
       bar.style.border = "1px solid rgba(15,31,23,0.10)";
       bar.title = `${d.key}
 Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueKey === "ratio" ? fmtRatio(d.total) : (valueKey === "hours" ? fmtHours(d.total) : fmtMoney(d.total)))}`;
@@ -537,7 +573,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
         const pct = (d.total > 0) ? (v / d.total) : 0;
         seg.style.height = `${pct * 100}%`;
         seg.style.background = colorForProject(p, projectNames);
-        seg.style.opacity = "0.85";
+        seg.style.opacity = "0.95"; seg.style.boxShadow = "inset 0 0 0 1px rgba(255,255,255,0.18)";
         seg.title = `${p}: ${valueKey === "count" ? String(Math.round(v)) : (valueKey === "ratio" ? fmtRatio(v) : (valueKey === "hours" ? fmtHours(v) : fmtMoney(v)))}`;
         bar.appendChild(seg);
       }
