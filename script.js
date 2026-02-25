@@ -457,8 +457,8 @@
     } catch (_) {}
 
     // Layout: Y-axis + chart area
-    const axisHeight = 160; // px (gives room for tick labels + rotated x labels)
     const barMaxHeight = 140; // px (kept consistent with existing scaling)
+    const axisHeight = barMaxHeight + 18; // ticks align to bar panel only
 
     const wrap = createEl("div", { className: "aw-stacked-wrap" });
     // ggplot panel frame (light grey background, subtle border)
@@ -487,18 +487,32 @@
     yLine.style.background = "rgba(15,31,23,0.14)";
     yAxis.appendChild(yLine);
 
-    const chart = createEl("div", { className: "aw-stacked-chart" });
-    // ggplot-like plot background with light major grid
-    chart.style.border = "1px solid rgba(15,31,23,0.10)";
-    chart.style.borderRadius = "14px";
-    chart.style.background = "transparent";
-    chart.style.padding = "10px 8px 4px 8px";
-    chart.style.display = "grid";
-    chart.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
-    chart.style.gap = "8px";
-    chart.style.alignItems = "end";
-    chart.style.padding = "8px 2px 0 2px";
+    // Right side = plot panel (bars) + x-axis labels (transparent)
+const plotCol = createEl("div");
+plotCol.style.display = "flex";
+plotCol.style.flexDirection = "column";
+plotCol.style.gap = "6px";
 
+// Bars panel (ONLY this area has the plot background/border)
+const chartArea = createEl("div", { className: "aw-stacked-chart" });
+chartArea.style.border = "1px solid rgba(15,31,23,0.10)";
+chartArea.style.borderRadius = "14px";
+chartArea.style.background = "rgba(255,255,255,0.86)";
+chartArea.style.padding = "10px 8px 8px 8px";
+chartArea.style.display = "grid";
+chartArea.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
+chartArea.style.gap = "8px";
+chartArea.style.alignItems = "end";
+
+// X-axis labels row (no background behind labels)
+const xAxis = createEl("div");
+xAxis.style.display = "grid";
+xAxis.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
+xAxis.style.gap = "8px";
+xAxis.style.alignItems = "start";
+xAxis.style.background = "transparent";
+xAxis.style.border = "none";
+xAxis.style.padding = "0 8px 0 8px";
     const maxTotal = Math.max(1, ...data.map(d => Number(d.total) || 0));
 
     // Y-axis ticks
@@ -547,11 +561,11 @@
       col.style.flexDirection = "column";
       col.style.justifyContent = "flex-end";
       col.style.gap = "6px";
-      col.style.alignItems = "right";
+      col.style.alignItems = "center";
 
       const bar = createEl("div", { className: "aw-bar" });
-      bar.style.width = "80%";
-      bar.style.maxWidth = "36px";
+      bar.style.width = "60%";
+      bar.style.maxWidth = "24px";
       bar.style.height = `${Math.round((Number(d.total) || 0) / maxTotal * barMaxHeight)}px`;
       bar.style.borderRadius = "6px";
       bar.style.overflow = "hidden";
@@ -579,7 +593,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       labelBox.style.height = "86px";
       labelBox.style.display = "flex";
       labelBox.style.alignItems = "flex-end";
-      labelBox.style.justifyContent = "flex-start";
+      labelBox.style.justifyContent = "center";
       labelBox.style.overflow = "visible";
 
       const label = createEl("div", { className: "aw-bar-label", textContent: d.key });
@@ -595,12 +609,15 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       labelBox.appendChild(label);
 
       col.appendChild(bar);
-      col.appendChild(labelBox);
-      chart.appendChild(col);
+      chartArea.appendChild(col);
+      xAxis.appendChild(labelBox);
     }
 
+    plotCol.appendChild(chartArea);
+    plotCol.appendChild(xAxis);
+
     wrap.appendChild(yAxis);
-    wrap.appendChild(chart);
+    wrap.appendChild(plotCol);
     container.appendChild(wrap);
   }
 
