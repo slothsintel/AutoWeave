@@ -547,7 +547,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       labelBox.style.height = "86px";
       labelBox.style.display = "flex";
       labelBox.style.alignItems = "flex-end";
-      labelBox.style.justifyContent = "flex-end";
+      labelBox.style.justifyContent = "flex-start";
       labelBox.style.overflow = "visible";
 
       const label = createEl("div", { className: "aw-bar-label", textContent: d.key });
@@ -1535,7 +1535,7 @@ function normalizeFigureGap(cardEl, fromId, toId, gapPx) {
       // Equalise the gap between figures (Duration↔Income and Income↔Ratio)
       const GAP = 32;
       visDuration.style.marginBottom = GAP + "px";
-      visIncome.style.marginBottom = "16px";
+      visIncome.style.marginBottom = "0px";
       visRatio.style.marginBottom = "0px";
 
       // Normalise only the spacer blocks between the figure containers (if present in tech.html)
