@@ -491,11 +491,7 @@
     // ggplot-like plot background with light major grid
     chart.style.border = "1px solid rgba(15,31,23,0.10)";
     chart.style.borderRadius = "14px";
-    chart.style.background = [
-      "linear-gradient(to bottom, rgba(15,31,23,0.05) 1px, transparent 1px) 0 0 / 100% 28px",
-      "linear-gradient(to right, rgba(15,31,23,0.04) 1px, transparent 1px) 0 0 / 60px 100%",
-      "rgba(255,255,255,0.92)",
-    ].join(",");
+    chart.style.background = "transparent";
     chart.style.padding = "10px 8px 4px 8px";
     chart.style.display = "grid";
     chart.style.gridTemplateColumns = `repeat(${Math.max(1, data.length)}, minmax(0, 1fr))`;
@@ -554,8 +550,8 @@
       col.style.alignItems = "right";
 
       const bar = createEl("div", { className: "aw-bar" });
-      bar.style.width = "100%";
-      bar.style.maxWidth = "84px";
+      bar.style.width = "80%";
+      bar.style.maxWidth = "36px";
       bar.style.height = `${Math.round((Number(d.total) || 0) / maxTotal * barMaxHeight)}px`;
       bar.style.borderRadius = "6px";
       bar.style.overflow = "hidden";
