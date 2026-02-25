@@ -1,6 +1,6 @@
 # AutoWeave
 
-<img src="assets/autoweave.svgautoweave.svg" align="right" width="180" />
+<img src="assets/autoweave.svg" align="right" width="180" />
 
 [![Static Badge](https://img.shields.io/badge/License-Sloths_Intel-darkgreen)]()
 [![Static Badge](https://img.shields.io/badge/Build-Passing-%23a9f378)]()
