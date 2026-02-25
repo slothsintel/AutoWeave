@@ -1381,27 +1381,16 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
               return;
             }
 
-            const deleteEmailInput = document.getElementById("delete-email");
-            const deletePasswordInput = document.getElementById("delete-password");
-            const deleteConfirmInput = document.getElementById("delete-confirm");
+            await authDeleteAccount(em, pw, c);
 
-            deleteForm.addEventListener("submit", async (e) => {
-              e.preventDefault();
+            clearAuthToken();
+            syncAuthUi();
 
-              try {
-                const email = deleteEmailInput.value.trim();
-                const password = deletePasswordInput.value;
-                const confirm = deleteConfirmInput.value;
-
-                await authDeleteAccount(email, password, confirm);
-
-                alert("Account deleted.");
-                clearAuthToken();
-                location.reload();
-              } catch (err) {
-                deleteError.textContent = err.message || "Delete failed";
-              }
-            });
+            msg.textContent = "Account deleted ✔";
+            setTimeout(() => {
+              closeModal();
+              location.reload();
+            }, 600);
 
             // Clear session
             clearAuthToken();
