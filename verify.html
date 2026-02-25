@@ -15,22 +15,38 @@
   </section>
 
 <script>
-const params = new URLSearchParams(window.location.search);
-const token = params.get("token");
-const statusEl = document.getElementById("status");
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  const statusEl = document.getElementById("status");
 
-if (!token) {
-  statusEl.textContent = "Invalid verification link.";
-} else {
-  fetch("https://autoweave-backend.onrender.com/api/v1/auth/verify?token=" + token)
-    .then(res => res.json())
-    .then(data => {
-      statusEl.textContent = data.message || "Email verified successfully.";
-    })
-    .catch(() => {
-      statusEl.textContent = "Verification failed. The link may have expired.";
-    });
-}
+  if (!token) {
+    statusEl.textContent = "Invalid verification link (missing token).";
+  } else {
+    (async () => {
+      try {
+        // ✅ Use POST (your backend rejects GET with 405)
+        const res = await fetch("https://autoweave-backend.onrender.com/api/v1/auth/verify?token=" + encodeURIComponent(token), {
+          method: "POST"
+        });
+
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+
+        if (!res.ok) {
+          statusEl.textContent = data.detail || data.message || `Verification failed (${res.status}).`;
+          return;
+        }
+
+        statusEl.textContent = data.message || "Email verified successfully.";
+
+        // optional: redirect after a moment
+        // setTimeout(() => window.location.href = "/tech.html#workbench", 1200);
+
+      } catch (e) {
+        statusEl.textContent = "Verification failed (network error).";
+      }
+    })();
+  }
 </script>
 
 </body>
