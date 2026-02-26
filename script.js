@@ -110,20 +110,19 @@
   }
 
   // =========================================================
-  // 2) Auth helpers (cleaned + hardened)
+  // 2) Auth helpers
   // =========================================================
-
   function normalizeToken(raw) {
     if (!raw) return "";
     let t = String(raw).trim();
 
-    // If token stored as quoted JSON string
+    // If token was stored as JSON string: "\"eyJ...\""
     if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
-      try { t = JSON.parse(t); } catch (e) {}
+      try { t = JSON.parse(t); } catch (e) { /* ignore */ }
       t = String(t).trim();
     }
 
-    // Strip Bearer prefix if present
+    // If token was stored with Bearer prefix, strip it
     if (/^bearer\s+/i.test(t)) {
       t = t.replace(/^bearer\s+/i, "").trim();
     }
@@ -147,12 +146,6 @@
     }
   }
 
-  function notifyAuthChanged() {
-    try {
-      window.dispatchEvent(new CustomEvent("ow-auth-changed"));
-    } catch (e) {}
-  }
-
   function setAuthToken(token, email) {
     try {
       const t = normalizeToken(token);
@@ -163,24 +156,7 @@
       const em = (email && String(email).trim()) || "";
       if (em) localStorage.setItem(AUTH_EMAIL_KEY, em);
       else localStorage.removeItem(AUTH_EMAIL_KEY);
-
-      notifyAuthChanged();
     } catch (e) {}
-  }
-
-  function clearAuthToken() {
-    try {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      localStorage.removeItem(AUTH_EMAIL_KEY);
-    } catch (e) {}
-
-    notifyAuthChanged();
-  }
-
-  function apiUrl(path) {
-    const p = String(path || "");
-    if (!API_BASE) return p.startsWith("/") ? p : `/${p}`;
-    return `${API_BASE}${p.startsWith("/") ? "" : "/"}${p}`;
   }
 
   async function apiFetch(path, options = {}) {
@@ -191,7 +167,11 @@
       headers.set("Content-Type", "application/json");
     }
 
+    // ✅ Always send Bearer <JWT> (cleaned)
     if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    console.log("apiFetch token length =", (token || "").length);
+    console.log("apiFetch token preview =", (token || "").slice(0, 20));
 
     const res = await fetch(apiUrl(path), { ...options, headers });
 
@@ -207,18 +187,79 @@
           if (t) msg = t;
         }
       } catch (e) {}
-
-      // Auto-clear expired or invalid sessions
-      if (res.status === 401 || res.status === 403) {
-        clearAuthToken();
-      }
-
       const err = new Error(String(msg));
       err.status = res.status;
       throw err;
     }
 
     return res;
+  }
+  
+  function clearAuthToken() {
+    setAuthToken("", "");
+  }
+
+  function apiUrl(path) {
+    const p = String(path || "");
+    if (!API_BASE) return p.startsWith("/") ? p : `/${p}`;
+    return `${API_BASE}${p.startsWith("/") ? "" : "/"}${p}`;
+  }
+
+  async function authRegister(email, password) {
+    const res = await apiFetch("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function authLogin(email, password) {
+    const res = await apiFetch("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function authForgot(email) {
+    const res = await apiFetch("/api/v1/auth/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  }
+
+  async function authReset(email, token, new_password) {
+    const res = await apiFetch("/api/v1/auth/reset", {
+      method: "POST",
+      body: JSON.stringify({ email, token, new_password }),
+    });
+    return res.json();
+  }
+
+  async function authVerify(email, token) {
+    const res = await apiFetch("/api/v1/auth/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, token }),
+    });
+    return res.json();
+  }
+
+  async function authResendVerify(email) {
+    const res = await apiFetch("/api/v1/auth/resend-verify", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  }
+
+  // NEW: delete account (soft delete on backend)
+  async function authDeleteAccount(email, password, confirm) {
+    const res = await apiFetch("/api/v1/auth/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ email, password, confirm }),
+    });
+    return res.json();
   }
 
   // =========================================================
@@ -1197,7 +1238,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       }
 
       // Resend handler (scoped)
-      resend.onclick = async () => {
+      resend.addEventListener("click", async () => {
         const em = email.value.trim();
         if (!em) {
           msg.textContent = "Please enter your email.";
@@ -1412,7 +1453,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
 
     syncAuthUi();
     handleAuthLinkFromUrl();
-    window.addEventListener("ow-auth-changed", syncAuthUi);
 
     return bar;
   }
