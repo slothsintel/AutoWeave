@@ -110,8 +110,34 @@
   }
 
   // =========================================================
-  // 2) Auth helpers (single source of truth)
+  // 2) Auth helpers
   // =========================================================
+  function normalizeToken(raw) {
+    if (!raw) return "";
+    let t = String(raw).trim();
+
+    // If token was stored as JSON string: "\"eyJ...\""
+    if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+      try { t = JSON.parse(t); } catch (e) { /* ignore */ }
+      t = String(t).trim();
+    }
+
+    // If token was stored with Bearer prefix, strip it
+    if (/^bearer\s+/i.test(t)) {
+      t = t.replace(/^bearer\s+/i, "").trim();
+    }
+
+    return t;
+  }
+
+  function getAuthEmail() {
+    try {
+      return localStorage.getItem(AUTH_EMAIL_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
   function normalizeToken(raw) {
     if (!raw) return "";
     let t = String(raw).trim();
@@ -125,23 +151,12 @@
       t = String(t).trim();
     }
 
-    // guard common bad values
-    if (t === "null" || t === "undefined") return "";
-
     return t;
   }
 
   function getAuthToken() {
     try {
       return normalizeToken(localStorage.getItem(AUTH_STORAGE_KEY) || "");
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function getAuthEmail() {
-    try {
-      return localStorage.getItem(AUTH_EMAIL_KEY) || "";
     } catch (e) {
       return "";
     }
@@ -156,8 +171,6 @@
 
       if (email) localStorage.setItem(AUTH_EMAIL_KEY, String(email));
       else localStorage.removeItem(AUTH_EMAIL_KEY);
-
-      window.dispatchEvent(new Event("ow-auth-changed"));
     } catch (e) {}
   }
 
@@ -165,8 +178,117 @@
     try {
       localStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem(AUTH_EMAIL_KEY);
-      window.dispatchEvent(new Event("ow-auth-changed"));
     } catch (e) {}
+  }
+
+  async function apiFetch(path, options = {}) {
+    const token = getAuthToken();
+
+    const headers = new Headers(options.headers || {});
+    if (!headers.has("Content-Type") && options.body && !(options.body instanceof FormData)) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    // ✅ Always send Bearer <JWT> (cleaned)
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    console.log("apiFetch token length =", (token || "").length);
+    console.log("apiFetch token preview =", (token || "").slice(0, 20));
+
+    const res = await fetch(apiUrl(path), { ...options, headers });
+
+    if (!res.ok) {
+      let msg = `${res.status} ${res.statusText}`;
+      try {
+        const ct = res.headers.get("content-type") || "";
+        if (ct.includes("application/json")) {
+          const j = await res.json();
+          msg = j?.detail || j?.message || msg;
+        } else {
+          const t = await res.text();
+          if (t) msg = t;
+        }
+      } catch (e) {}
+      const err = new Error(String(msg));
+      err.status = res.status;
+      throw err;
+    }
+
+    return res;
+  }
+  function getAuthEmail() {
+    try {
+      return localStorage.getItem(AUTH_EMAIL_KEY) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+  
+  function clearAuthToken() {
+    setAuthToken("", "");
+  }
+
+  function apiUrl(path) {
+    const p = String(path || "");
+    if (!API_BASE) return p.startsWith("/") ? p : `/${p}`;
+    return `${API_BASE}${p.startsWith("/") ? "" : "/"}${p}`;
+  }
+
+  async function authRegister(email, password) {
+    const res = await apiFetch("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function authLogin(email, password) {
+    const res = await apiFetch("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    return res.json();
+  }
+
+  async function authForgot(email) {
+    const res = await apiFetch("/api/v1/auth/forgot", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  }
+
+  async function authReset(email, token, new_password) {
+    const res = await apiFetch("/api/v1/auth/reset", {
+      method: "POST",
+      body: JSON.stringify({ email, token, new_password }),
+    });
+    return res.json();
+  }
+
+  async function authVerify(email, token) {
+    const res = await apiFetch("/api/v1/auth/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, token }),
+    });
+    return res.json();
+  }
+
+  async function authResendVerify(email) {
+    const res = await apiFetch("/api/v1/auth/resend-verify", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    return res.json();
+  }
+
+  // NEW: delete account (soft delete on backend)
+  async function authDeleteAccount(email, password, confirm) {
+    const res = await apiFetch("/api/v1/auth/delete-account", {
+      method: "POST",
+      body: JSON.stringify({ email, password, confirm }),
+    });
+    return res.json();
   }
 
   // =========================================================
@@ -1145,7 +1267,7 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
       }
 
       // Resend handler (scoped)
-      resend.onclick = async () => {
+      resend.addEventListener("click", async () => {
         const em = email.value.trim();
         if (!em) {
           msg.textContent = "Please enter your email.";
@@ -1360,7 +1482,6 @@ Total: ${valueKey === "count" ? String(Math.round(Number(d.total)||0)) : (valueK
 
     syncAuthUi();
     handleAuthLinkFromUrl();
-    window.addEventListener("ow-auth-changed", syncAuthUi);
 
     return bar;
   }
@@ -2087,7 +2208,7 @@ function normalizeFigureGap(cardEl, fromId, toId, gapPx) {
     });
   
     // ---------------------------------------------------------
-    // Auto-load sample CSVs from assets/technology on page load
+    // Auto-load sample CSVs from /assets/technology on page load
     // (only if user hasn't selected files) and run merge once
     // ---------------------------------------------------------
     async function maybeLoadDefaultSamples() {
@@ -2116,8 +2237,8 @@ function normalizeFigureGap(cardEl, fromId, toId, gapPx) {
         setStatus("Loading sample files…");
 
         const [entriesF, incomesF] = await Promise.all([
-          hasEntries ? null : fetchAsFile("assets/technology/time_sample.csv", "time_sample.csv"),
-          hasIncomes ? null : fetchAsFile("assets/technology/income_sample.csv", "income_sample.csv"),
+          hasEntries ? null : fetchAsFile("/assets/technology/time_sample.csv", "time_sample.csv"),
+          hasIncomes ? null : fetchAsFile("/assets/technology/income_sample.csv", "income_sample.csv"),
         ]);
 
         if (entriesF) setInputFile(entriesFile, entriesF);
@@ -2126,7 +2247,7 @@ function normalizeFigureGap(cardEl, fromId, toId, gapPx) {
         // Optional projects sample (ignore if missing)
         if (projectsFile && !hasProjects) {
           try {
-            const projectsF = await fetchAsFile("assets/technology/project_sample.csv", "project_sample.csv");
+            const projectsF = await fetchAsFile("/assets/technology/project_sample.csv", "project_sample.csv");
             setInputFile(projectsFile, projectsF);
           } catch (e) {
             // ignore
