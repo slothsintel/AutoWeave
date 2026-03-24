@@ -2,7 +2,7 @@
 
 <img src="assets/autoweave.svg" align="right" width="180" />
 
-[![Static Badge](https://img.shields.io/badge/License-Sloxen-darkgreen)]()
+[![Static Badge](https://img.shields.io/badge/License-Sloxen™-darkgreen)]()
 [![Static Badge](https://img.shields.io/badge/Build-Passing-%23a9f378)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)]()
 [![JavaScript](https://img.shields.io/badge/JavaScript-Vanilla-orange.svg)]()
