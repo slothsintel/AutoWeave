@@ -11,11 +11,11 @@
 [![Static Badge](https://img.shields.io/badge/Sloths_Fin-Powered-brightgreen)]()
 [![Platform](https://img.shields.io/badge/Platform-Web%20%7C%20WIN%20%7C%20Linux%20%7C%20WSL%20%7C%20macOS-lightgrey)]()
 
-**AutoWeave** is developed and maintained by **Sloths Intel**. It is a deterministic, browser-first **CSV merge + ETL** tool designed for real-world operational datasets (time logs, income records, project lists) that arrive **asynchronously** and inconsistently.
+**AutoWeave** is developed and maintained by **Sloxen™**. It is a deterministic, browser-first **CSV merge + ETL** tool designed for real-world operational datasets (time logs, income records, project lists) that arrive **asynchronously** and inconsistently.
 
 AutoWeave focuses on **reproducibility, auditability, and low-friction workflows**: validate → normalise → merge → deduplicate → summarise → visualise → export.
 
-🌐 Website: https://autoweave.slothsintel.com
+🌐 Website: https://autoweave.sloxen.com
 
 ---
 
@@ -226,15 +226,15 @@ All charts:
 
 # Contribution
 
-Maintained by [**Sloths Intel GitHub**](https://github.com/slothsintel), and [**Daddy Sloth GitHub**](https://github.com/drxilu).
+Maintained by [**Sloxen™ GitHub**](https://github.com/sloxen), and [**Daddy Sloth GitHub**](https://github.com/drxilu).
 
 ---
 
 # License
 
-© 2026 **Sloths Intel**.
+© 2026 **Sloxen™**.
 
-A trading name of **Sloths Intel Ltd**
+A trading name of **Sloxen Ltd**
 Registered in England and Wales (Company No. 16907507).
 
 MIT License.
@@ -243,9 +243,9 @@ MIT License.
 
 ## Links
 
-* [AutoWeave Website](https://autoweave.slothsintel.com)
-* [AutoWeave GitHub](https://github.com/slothsintel/AutoWeave)
-* [Company homepage](https://slothsintel.com)
+* [AutoWeave Website](https://autoweave.sloxen.com)
+* [AutoWeave GitHub](https://github.com/sloxen/AutoWeave)
+* [Company homepage](https://sloxen.com)
 
 <p align="right">
   <a href="#top" style="text-decoration:none;">
